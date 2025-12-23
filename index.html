@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WARZONE: GOD MODE</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; touch-action: none; user-select: none; font-family: 'Segoe UI', sans-serif; }
+        
+        /* UI LAYERS */
+        #game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: none; }
+        
+        /* ADMIN BUTTON */
+        #admin-btn-container {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            pointer-events: auto; z-index: 20;
+        }
+        #admin-btn {
+            background: rgba(0,0,0,0.6); border: 2px solid #00ff00; color: #00ff00;
+            padding: 8px 16px; font-weight: bold; border-radius: 4px; cursor: pointer;
+            font-size: 14px; text-shadow: 0 0 5px #00ff00;
+        }
+        #admin-btn.active { background: #00ff00; color: #000; box-shadow: 0 0 15px #00ff00; }
+
+        /* CROSSHAIR */
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; width: 20px; height: 20px;
+            transform: translate(-50%, -50%);
+        }
+        .ch-line { position: absolute; background: rgba(255,255,255,0.8); }
+        .ch-h { width: 20px; height: 2px; top: 9px; left: 0; }
+        .ch-v { width: 2px; height: 20px; top: 0; left: 9px; }
+
+        /* HUD */
+        .hud-stats { position: absolute; bottom: 20px; left: 140px; display: flex; gap: 15px; }
+        .stat-box { font-size: 1.2rem; font-weight: bold; text-shadow: 1px 1px 0 #000; }
+        .hp { color: #ff3333; } .ammo { color: #ffcc00; }
+
+        /* CHAT */
+        #chat-wrap {
+            position: absolute; top: 50px; left: 10px; width: 250px; height: 150px;
+            pointer-events: auto; display: flex; flex-direction: column;
+        }
+        #chat-msgs {
+            flex: 1; overflow-y: auto; background: rgba(0,0,0,0.3); 
+            color: #fff; font-size: 12px; padding: 5px; margin-bottom: 5px;
+            scrollbar-width: none; border-radius: 4px;
+        }
+        #chat-input-row { display: flex; gap: 5px; }
+        #chat-input { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid #555; color: white; padding: 4px; border-radius: 4px; }
+        #chat-send { background: #00ff00; border: none; padding: 0 10px; font-weight: bold; border-radius: 4px; }
+
+        /* CONTROLS */
+        .touch-zone { position: absolute; z-index: 5; }
+        #stick-zone { bottom: 40px; left: 40px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 50%; pointer-events: auto; }
+        #stick-knob { position: absolute; top: 50%; left: 50%; width: 50px; height: 50px; background: rgba(255,255,255,0.4); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+        
+        .action-btn {
+            position: absolute; border-radius: 50%; pointer-events: auto;
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; color: white; backdrop-filter: blur(4px);
+        }
+        #btn-fire { bottom: 60px; right: 40px; width: 70px; height: 70px; background: rgba(255, 50, 50, 0.4); border: 2px solid red; }
+        #btn-fire:active { background: rgba(255, 50, 50, 0.7); }
+        
+        #btn-jump { bottom: 150px; right: 30px; width: 50px; height: 50px; background: rgba(255,255,255,0.2); border: 1px solid #fff; }
+        #btn-scope { bottom: 140px; right: 90px; width: 50px; height: 50px; background: rgba(255,255,255,0.2); border: 1px solid #fff; font-size: 12px; }
+
+        /* LOADING */
+        #loader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; display: flex; justify-content: center; align-items: center;
+            color: #00ff00; font-family: monospace; font-size: 20px; z-index: 100;
+        }
+
+        /* MODAL */
+        #admin-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal-box { background: #111; padding: 20px; border: 1px solid #00ff00; text-align: center; border-radius: 8px; }
+        .modal-inp { padding: 10px; background: #000; border: 1px solid #333; color: #00ff00; text-align: center; font-size: 18px; width: 150px; }
+        .modal-btn { padding: 10px 20px; background: #00ff00; color: #000; border: none; font-weight: bold; margin-top: 10px; cursor: pointer; }
+    </style>
+    
+    <!-- LIBRARIES -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+</head>
+<body>
+
+    <div id="loader">INITIALIZING WARZONE...</div>
+
+    <div id="game-ui">
+        <!-- ADMIN -->
+        <div id="admin-btn-container">
+            <button id="admin-btn" onclick="toggleAdmin()">GET ADMIN</button>
+        </div>
+
+        <!-- STATS -->
+        <div class="hud-stats">
+            <div class="stat-box hp">HP: <span id="hp-val">100</span></div>
+            <div class="stat-box ammo">AMMO: <span id="ammo-val">30</span></div>
+        </div>
+
+        <!-- CROSSHAIR -->
+        <div id="crosshair">
+            <div class="ch-line ch-h"></div>
+            <div class="ch-line ch-v"></div>
+        </div>
+
+        <!-- CHAT -->
+        <div id="chat-wrap">
+            <div id="chat-msgs"></div>
+            <div id="chat-input-row">
+                <input type="text" id="chat-input" placeholder="Chat...">
+                <button id="chat-send">></button>
+            </div>
+        </div>
+
+        <!-- CONTROLS -->
+        <div id="joystick-zone"><div id="stick-knob"></div></div>
+        <div id="btn-fire" class="action-btn"></div>
+        <div id="btn-jump" class="action-btn">JUMP</div>
+        <div id="btn-scope" class="action-btn">AIM</div>
+    </div>
+
+    <!-- ADMIN MODAL -->
+    <div id="admin-modal">
+        <div class="modal-box">
+            <h3 style="color:#00ff00; margin-top:0;">ENTER GOD CODE</h3>
+            <input type="password" id="admin-code" class="modal-inp" maxlength="4">
+            <br>
+            <button class="modal-btn" onclick="verifyAdmin()">ACCESS</button>
+            <button class="modal-btn" style="background:#333; color:#fff" onclick="closeModal()">CANCEL</button>
+        </div>
+    </div>
+
+<script>
+    // --- FIREBASE SETUP ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBJ6YSWR1CkjCc58fRopdWtiuI_NGedUEo",
+      authDomain: "gemini-multiplayer-948fe.firebaseapp.com",
+      databaseURL: "https://gemini-multiplayer-948fe-default-rtdb.firebaseio.com",
+      projectId: "gemini-multiplayer-948fe",
+      storageBucket: "gemini-multiplayer-948fe.firebasestorage.app",
+      messagingSenderId: "312734987383",
+      appId: "1:312734987383:web:2aa0ea9caa5f0c8cfd8272"
+    };
+
+    let db, playersRef, chatRef;
+    try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+        playersRef = db.ref("players");
+        chatRef = db.ref("chat");
+    } catch(e) { console.error("Firebase Error", e); }
+
+    // --- GAME VARIABLES ---
+    const myId = "P_" + Math.floor(Math.random()*100000);
+    let scene, camera, renderer, world, playerBody;
+    let pitchObj = new THREE.Object3D(), yawObj = new THREE.Object3D();
+    let otherPlayers = {};
+    let bullets = [];
+    
+    // State
+    let hp = 100;
+    let ammo = 30;
+    let isScoped = false;
+    let isGodMode = false;
+    let lastShot = 0;
+    
+    // Inputs
+    let move = { f:0, b:0, l:0, r:0 };
+    let touchData = { moveId:null, lookId:null, startX:0, startY:0, lookX:0, lookY:0 };
+    
+    // --- TEXTURE GEN ---
+    function genTex(color, noise=true) {
+        const c = document.createElement('canvas'); c.width=128; c.height=128;
+        const x = c.getContext('2d');
+        x.fillStyle = color; x.fillRect(0,0,128,128);
+        if(noise) {
+            x.fillStyle = "rgba(0,0,0,0.1)";
+            for(let i=0;i<400;i++) x.fillRect(Math.random()*128,Math.random()*128,2,2);
+        }
+        const t = new THREE.CanvasTexture(c);
+        t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping;
+        return t;
+    }
+
+    // --- INIT ---
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x202030);
+        scene.fog = new THREE.Fog(0x202030, 10, 60);
+
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        
+        // Physics
+        world = new CANNON.World();
+        world.gravity.set(0, -20, 0);
+        const pMat = new CANNON.Material();
+        world.addContactMaterial(new CANNON.ContactMaterial(pMat, pMat, { friction: 0.0, restitution: 0.0 }));
+
+        // Player
+        const shape = new CANNON.Sphere(1.2);
+        playerBody = new CANNON.Body({ mass: 70, material: pMat });
+        playerBody.addShape(shape);
+        playerBody.position.set(0, 10, 0);
+        playerBody.linearDamping = 0.9;
+        world.addBody(playerBody);
+
+        // Camera Rig
+        pitchObj.add(camera);
+        yawObj.add(pitchObj);
+        yawObj.position.y = 1.6; // Eye height
+        scene.add(yawObj);
+
+        // Lighting
+        const amb = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(amb);
+        const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+        dir.position.set(50, 100, 50);
+        scene.add(dir);
+
+        // World Build
+        buildWorld();
+
+        // Render
+        renderer = new THREE.WebGLRenderer({ antialias: false }); // Fast render
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Start
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'block';
+        
+        setupControls();
+        setupNet();
+        animate();
+    }
+
+    function buildWorld() {
+        // Floor
+        const fTex = genTex('#1a1a1a'); fTex.repeat.set(50,50);
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(200,200), new THREE.MeshLambertMaterial({map:fTex}));
+        floor.rotation.x = -Math.PI/2;
+        scene.add(floor);
+        
+        const fBody = new CANNON.Body({mass:0, shape:new CANNON.Plane()});
+        fBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
+        world.addBody(fBody);
+
+        // Boxes
+        const bTex = genTex('#444455');
+        const boxGeo = new THREE.BoxGeometry(4,4,4);
+        const boxMat = new THREE.MeshLambertMaterial({map:bTex});
+        
+        for(let i=0; i<30; i++) {
+            const mesh = new THREE.Mesh(boxGeo, boxMat);
+            const x = (Math.random()-0.5)*150;
+            const z = (Math.random()-0.5)*150;
+            const y = 2;
+            mesh.position.set(x,y,z);
+            scene.add(mesh);
+            
+            const body = new CANNON.Body({mass:0, position:new CANNON.Vec3(x,y,z)});
+            body.addShape(new CANNON.Box(new CANNON.Vec3(2,2,2)));
+            world.addBody(body);
+        }
+    }
+
+    // --- CONTROLS ---
+    function setupControls() {
+        const joy = document.getElementById('joystick-zone');
+        const knob = document.getElementById('stick-knob');
+        
+        // Joystick
+        joy.addEventListener('touchstart', e => {
+            e.preventDefault();
+            const t = e.changedTouches[0];
+            touchData.moveId = t.identifier;
+            touchData.startX = t.clientX;
+            touchData.startY = t.clientY;
+        }, {passive:false});
+
+        joy.addEventListener('touchmove', e => {
+            e.preventDefault();
+            for(let i=0; i<e.changedTouches.length; i++) {
+                if(e.changedTouches[i].identifier === touchData.moveId) {
+                    const t = e.changedTouches[i];
+                    let dx = t.clientX - touchData.startX;
+                    let dy = t.clientY - touchData.startY;
+                    const dist = Math.sqrt(dx*dx+dy*dy);
+                    if(dist > 40) { dx=(dx/dist)*40; dy=(dy/dist)*40; }
+                    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+                    
+                    move.f = dy < -10; move.b = dy > 10;
+                    move.l = dx < -10; move.r = dx > 10;
+                }
+            }
+        }, {passive:false});
+
+        joy.addEventListener('touchend', e => {
+            for(let i=0; i<e.changedTouches.length; i++) {
+                if(e.changedTouches[i].identifier === touchData.moveId) {
+                    touchData.moveId = null;
+                    move = {f:0,b:0,l:0,r:0};
+                    knob.style.transform = `translate(-50%, -50%)`;
+                }
+            }
+        });
+
+        // Look (Right Screen)
+        document.addEventListener('touchstart', e => {
+            for(let i=0; i<e.changedTouches.length; i++) {
+                const t = e.changedTouches[i];
+                if(t.clientX > window.innerWidth/2 && !t.target.classList.contains('action-btn')) {
+                    touchData.lookId = t.identifier;
+                    touchData.lookX = t.clientX;
+                    touchData.lookY = t.clientY;
+                }
+            }
+        }, {passive:false});
+
+        document.addEventListener('touchmove', e => {
+            for(let i=0; i<e.changedTouches.length; i++) {
+                if(e.changedTouches[i].identifier === touchData.lookId) {
+                    const t = e.changedTouches[i];
+                    const dx = t.clientX - touchData.lookX;
+                    const dy = t.clientY - touchData.lookY;
+                    yawObj.rotation.y -= dx * 0.005;
+                    pitchObj.rotation.x -= dy * 0.005;
+                    pitchObj.rotation.x = Math.max(-1.5, Math.min(1.5, pitchObj.rotation.x));
+                    touchData.lookX = t.clientX;
+                    touchData.lookY = t.clientY;
+                }
+            }
+        }, {passive:false});
+
+        // Buttons
+        document.getElementById('btn-jump').addEventListener('touchstart', e => {
+            e.preventDefault();
+            if(playerBody.position.y < 3 || isGodMode) playerBody.velocity.y = 10;
+        });
+
+        document.getElementById('btn-fire').addEventListener('touchstart', e => {
+            e.preventDefault();
+            fireBullet();
+        });
+
+        document.getElementById('btn-scope').addEventListener('touchstart', e => {
+            e.preventDefault();
+            isScoped = !isScoped;
+            camera.fov = isScoped ? 30 : 75;
+            camera.updateProjectionMatrix();
+        });
+    }
+
+    // --- ACTIONS ---
+    function fireBullet() {
+        const now = Date.now();
+        if(now - lastShot < 100) return; // Fire rate limit (100ms)
+        lastShot = now;
+
+        if(ammo > 0) {
+            if(!isGodMode) {
+                ammo--;
+                document.getElementById('ammo-val').innerText = ammo;
+            }
+            
+            // Visual Recoil (Small)
+            pitchObj.rotation.x += 0.02;
+
+            // Bullet Logic
+            // (Simplified Raycast Visual)
+            // ...
+        }
+    }
+
+    // --- GAME LOOP ---
+    function animate() {
+        requestAnimationFrame(animate);
+        const dt = 1/60;
+
+        if(isGodMode) {
+            // FLY LOGIC
+            playerBody.velocity.set(0,0,0); // Reset Gravity
+            playerBody.mass = 0;
+            const speed = 20;
+            const dir = new THREE.Vector3();
+            if(move.f) dir.z = -1; if(move.b) dir.z = 1;
+            if(move.l) dir.x = -1; if(move.r) dir.x = 1;
+            dir.applyEuler(new THREE.Euler(pitchObj.rotation.x, yawObj.rotation.y, 0));
+            playerBody.position.x += dir.x * speed * dt;
+            playerBody.position.y += dir.y * speed * dt;
+            playerBody.position.z += dir.z * speed * dt;
+        } else {
+            // NORMAL WALK
+            world.step(dt);
+            playerBody.mass = 70;
+            const speed = 10;
+            const dir = new THREE.Vector3();
+            if(move.f) dir.z = -1; if(move.b) dir.z = 1;
+            if(move.l) dir.x = -1; if(move.r) dir.x = 1;
+            dir.applyEuler(new THREE.Euler(0, yawObj.rotation.y, 0));
+            playerBody.velocity.x = dir.x * speed;
+            playerBody.velocity.z = dir.z * speed;
+        }
+
+        // Camera Follow
+        yawObj.position.copy(playerBody.position);
+        if(!isGodMode) yawObj.position.y += 0.6; // Eye offset
+
+        renderer.render(scene, camera);
+        
+        // Sync
+        if(playersRef && Math.random() < 0.1) {
+            playersRef.child(myId).set({
+                x: playerBody.position.x, y: playerBody.position.y, z: playerBody.position.z,
+                rot: yawObj.rotation.y
+            });
+        }
+    }
+
+    // --- MULTIPLAYER ---
+    function setupNet() {
+        playersRef.on("value", s => {
+            const d = s.val() || {};
+            for(let id in otherPlayers) if(!d[id]) { scene.remove(otherPlayers[id].mesh); delete otherPlayers[id]; }
+            for(let id in d) {
+                if(id===myId) continue;
+                if(!otherPlayers[id]) {
+                    const m = new THREE.Mesh(new THREE.BoxGeometry(1.5,3,1.5), new THREE.MeshLambertMaterial({color:0xff0000}));
+                    scene.add(m); otherPlayers[id]={mesh:m};
+                }
+                otherPlayers[id].mesh.position.lerp(new THREE.Vector3(d[id].x, d[id].y, d[id].z), 0.2);
+                otherPlayers[id].mesh.rotation.y = d[id].rot;
+            }
+        });
+        playersRef.child(myId).onDisconnect().remove();
+        
+        // Chat
+        chatRef.limitToLast(10).on("child_added", s => {
+            const v = s.val();
+            const d = document.createElement('div');
+            d.innerHTML = `<b style="color:${v.id===myId?'lime':'orange'}">${v.id.substr(0,4)}:</b> ${v.msg}`;
+            document.getElementById('chat-msgs').append(d);
+            document.getElementById('chat-msgs').scrollTop = 9999;
+        });
+        
+        document.getElementById('chat-send').onclick = () => {
+            const txt = document.getElementById('chat-input').value;
+            if(txt) { chatRef.push({id:myId, msg:txt}); document.getElementById('chat-input').value=''; }
+        }
+    }
+
+    // --- ADMIN LOGIC ---
+    function toggleAdmin() {
+        if(isGodMode) {
+            // Leave Admin
+            isGodMode = false;
+            document.getElementById('admin-btn').innerText = "GET ADMIN";
+            document.getElementById('admin-btn').classList.remove('active');
+            document.getElementById('hp-val').innerText = "100";
+            document.getElementById('hp-val').style.color = "#ff3333";
+            playerBody.mass = 70; // Gravity back
+        } else {
+            // Open Modal
+            document.getElementById('admin-modal').style.display = 'flex';
+        }
+    }
+    
+    function closeModal() { document.getElementById('admin-modal').style.display = 'none'; }
+    
+    function verifyAdmin() {
+        const code = document.getElementById('admin-code').value;
+        if(code === "7434") {
+            isGodMode = true;
+            closeModal();
+            document.getElementById('admin-btn').innerText = "LEAVE ADMIN";
+            document.getElementById('admin-btn').classList.add('active');
+            document.getElementById('hp-val').innerText = "GOD";
+            document.getElementById('hp-val').style.color = "#00ff00";
+            document.getElementById('ammo-val').innerText = "∞";
+            ammo = 9999;
+        } else {
+            alert("ACCESS DENIED");
+        }
+    }
+
+    window.onload = init;
+</script>
+</body>
+</html>
