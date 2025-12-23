@@ -2,655 +2,473 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>WARZONE: FINAL FIXED</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Rust: Mobile Warfare</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; touch-action: none; user-select: none; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
         
-        /* UI LAYERS */
-        #game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: none; }
+        /* UI LAYER */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
         
-        /* HIT EFFECTS */
-        #damage-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: red; opacity: 0; pointer-events: none; z-index: 5;
-            transition: opacity 0.1s;
-        }
-        #hit-marker {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 40px; height: 40px; pointer-events: none; display: none; z-index: 20;
-        }
-        #hit-marker::before, #hit-marker::after {
-            content: ''; position: absolute; top: 18px; left: 0; width: 40px; height: 4px;
-            background: #ff0000; border-radius: 2px;
-        }
-        #hit-marker::before { transform: rotate(45deg); }
-        #hit-marker::after { transform: rotate(-45deg); }
-
-        /* DEATH SCREEN */
-        #death-screen {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(100, 0, 0, 0.8); z-index: 100; display: none;
-            flex-direction: column; justify-content: center; align-items: center;
-        }
-        #death-msg { font-size: 3rem; color: red; font-weight: 900; text-shadow: 2px 2px black; margin-bottom: 20px; }
-        #respawn-btn {
-            padding: 15px 40px; background: #fff; color: #000; font-size: 1.5rem; border: none;
-            font-weight: bold; cursor: pointer; border-radius: 8px; pointer-events: auto;
-        }
-
-        /* ADMIN BUTTON */
-        #admin-btn-container {
-            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-            pointer-events: auto; z-index: 20;
-        }
-        #admin-btn {
-            background: rgba(0,0,0,0.6); border: 2px solid #00ff00; color: #00ff00;
-            padding: 8px 16px; font-weight: bold; border-radius: 4px; cursor: pointer;
-            font-size: 14px; text-shadow: 0 0 5px #00ff00;
-        }
-        #admin-btn.active { background: #00ff00; color: #000; box-shadow: 0 0 15px #00ff00; }
-
-        /* TOASTS */
-        #chat-toasts {
-            position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
-            width: 80%; display: flex; flex-direction: column; align-items: center; gap: 5px;
-            pointer-events: none; z-index: 30;
-        }
-        .toast-msg {
-            background: rgba(0, 0, 0, 0.7); color: #fff; padding: 5px 10px;
-            border-radius: 20px; font-size: 12px; border: 1px solid rgba(255,255,255,0.3);
-            animation: fadeOut 4s forwards;
-        }
-        @keyframes fadeOut { 0% { opacity: 0; transform: translateY(-10px); } 10% { opacity: 1; transform: translateY(0); } 90% { opacity: 1; } 100% { opacity: 0; display: none; } }
-
-        /* CHAT */
-        #chat-toggle {
-            position: absolute; top: 10px; left: 10px; pointer-events: auto;
-            width: 40px; height: 40px; background: rgba(0,0,0,0.5); border: 1px solid #fff;
-            border-radius: 50%; display: flex; justify-content: center; align-items: center;
-            color: #fff; font-size: 20px; z-index: 25; cursor: pointer;
-        }
-        #chat-wrap {
-            position: absolute; top: 60px; left: 10px; width: 250px; height: 150px;
-            pointer-events: auto; display: none; flex-direction: column; z-index: 25;
-            background: rgba(0,0,0,0.8); border: 1px solid #555; border-radius: 8px;
-        }
-        #chat-msgs { flex: 1; overflow-y: auto; color: #fff; font-size: 12px; padding: 5px; scrollbar-width: none; }
-        #chat-input-row { display: flex; padding: 5px; border-top: 1px solid #444; }
-        #chat-input { flex: 1; background: rgba(255,255,255,0.1); border: none; color: white; padding: 4px; border-radius: 4px; outline: none; }
-        #chat-send { background: #00ff00; border: none; padding: 0 10px; font-weight: bold; border-radius: 4px; margin-left: 5px; cursor: pointer; }
-
-        /* HUD */
+        /* HUD ELEMENTS */
+        .hud-text { position: absolute; color: white; font-weight: bold; text-shadow: 2px 2px 0 #000; pointer-events: none; }
+        #health-hud { top: 20px; left: 20px; font-size: 24px; color: #e74c3c; }
+        #ammo-hud { bottom: 100px; right: 20px; font-size: 32px; color: #f1c40f; }
         #crosshair { position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); pointer-events: none; }
-        .ch-line { position: absolute; background: #fff; box-shadow: 0 0 2px #000; }
-        .ch-h { width: 20px; height: 2px; top: 9px; left: 0; }
-        .ch-v { width: 2px; height: 20px; top: 0; left: 9px; }
+        #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255,255,255,0.8); }
+        #crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; }
+        #crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }
 
-        .hud-stats { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; }
-        .stat-box { font-size: 1.2rem; font-weight: bold; text-shadow: 1px 1px 2px #000; white-space: nowrap; }
-        .hp { color: #ff3333; } .ammo { color: #ffcc00; }
+        /* ACTION BUTTONS (Fixed) */
+        .btn {
+            position: absolute; pointer-events: auto;
+            background: rgba(255, 255, 255, 0.15); border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%; color: white; font-weight: bold; display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px); touch-action: manipulation;
+        }
+        .btn:active { background: rgba(255, 255, 255, 0.4); transform: scale(0.95); }
 
-        /* CONTROLS */
-        #joystick-zone {
-            position: absolute; bottom: 30px; left: 30px; width: 120px; height: 120px;
-            background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2);
-            border-radius: 50%; pointer-events: auto; touch-action: none;
-        }
-        #stick-knob {
-            position: absolute; top: 50%; left: 50%; width: 50px; height: 50px;
-            background: rgba(255,255,255,0.5); border-radius: 50%;
-            transform: translate(-50%, -50%); pointer-events: none;
-        }
-        .action-btn {
-            position: absolute; border-radius: 50%; pointer-events: auto;
-            display: flex; justify-content: center; align-items: center;
-            font-weight: bold; color: white; backdrop-filter: blur(4px); touch-action: none;
-        }
-        #btn-fire { bottom: 50px; right: 30px; width: 80px; height: 80px; background: rgba(255, 50, 50, 0.4); border: 3px solid red; }
-        #btn-fire:active { background: rgba(255, 50, 50, 0.8); }
-        #btn-jump { bottom: 150px; right: 40px; width: 60px; height: 60px; background: rgba(255,255,255,0.2); border: 2px solid #fff; }
-        #btn-scope { bottom: 60px; right: 130px; width: 50px; height: 50px; background: rgba(255,255,255,0.2); border: 2px solid #fff; font-size: 10px; }
+        #btn-fire { width: 70px; height: 70px; bottom: 40px; right: 30px; background: rgba(231, 76, 60, 0.4); border-color: #e74c3c; }
+        #btn-jump { width: 60px; height: 60px; bottom: 150px; right: 120px; }
+        #btn-reload { width: 50px; height: 50px; bottom: 40px; right: 120px; font-size: 12px; }
 
-        /* LOADING */
-        #loader {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #111; display: flex; justify-content: center; align-items: center;
-            color: #00ff00; font-family: monospace; font-size: 20px; z-index: 100;
-        }
+        /* DYNAMIC ZONES */
+        #zone-left { position: absolute; top: 0; left: 0; width: 50%; height: 100%; pointer-events: auto; }
+        #zone-right { position: absolute; top: 0; right: 0; width: 50%; height: 100%; pointer-events: auto; }
 
-        /* ADMIN MODAL */
-        #admin-modal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center; z-index: 1000;
-        }
-        .modal-box { background: #111; padding: 20px; border: 1px solid #00ff00; text-align: center; border-radius: 8px; }
-        .modal-inp { padding: 10px; background: #000; border: 1px solid #333; color: #00ff00; text-align: center; font-size: 18px; width: 150px; }
-        .modal-btn { padding: 10px 20px; background: #00ff00; color: #000; border: none; font-weight: bold; margin-top: 10px; cursor: pointer; }
+        /* JOYSTICK VISUAL */
+        #joystick-base { position: absolute; width: 100px; height: 100px; background: rgba(255,255,255,0.1); border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); transform: translate(-50%, -50%); display: none; pointer-events: none; }
+        #joystick-knob { position: absolute; width: 40px; height: 40px; background: rgba(255,255,255,0.5); border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 10px rgba(0,0,0,0.5); }
     </style>
     
-    <!-- LIBRARIES -->
+    <!-- High Performance 3D Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body>
 
-    <div id="loader">CONNECTING TO BATTLEFIELD...</div>
+    <!-- 3D Canvas Container -->
+    <div id="game-container"></div>
 
-    <div id="damage-overlay"></div>
-    <div id="hit-marker"></div>
+    <!-- UI Overlay -->
+    <div id="ui-layer">
+        <div id="health-hud">HP: 100/100</div>
+        <div id="ammo-hud">30 / 90</div>
+        <div id="crosshair"></div>
 
-    <div id="game-ui">
-        <div id="admin-btn-container"><button id="admin-btn" onclick="toggleAdmin()">ADMIN</button></div>
-        <div class="hud-stats">
-            <div class="stat-box hp">HP: <span id="hp-val">100</span></div>
-            <div class="stat-box ammo">AMMO: <span id="ammo-val">30</span></div>
-        </div>
-        <div id="crosshair"><div class="ch-line ch-h"></div><div class="ch-line ch-v"></div></div>
-        <div id="chat-toasts"></div>
-        <div id="chat-toggle" onclick="toggleChatUi()">💬</div>
-        <div id="chat-wrap">
-            <div id="chat-msgs"></div>
-            <div id="chat-input-row"><input type="text" id="chat-input" placeholder="Say something..."><button id="chat-send">></button></div>
-        </div>
-        <div id="joystick-zone"><div id="stick-knob"></div></div>
-        <div id="btn-fire" class="action-btn"></div>
-        <div id="btn-jump" class="action-btn">JUMP</div>
-        <div id="btn-scope" class="action-btn">AIM</div>
-    </div>
+        <!-- Touch Zones -->
+        <div id="zone-left"></div> <!-- Move -->
+        <div id="zone-right"></div> <!-- Look -->
 
-    <div id="death-screen">
-        <div id="death-msg">YOU DIED</div>
-        <button id="respawn-btn" onclick="respawn()">PLAY AGAIN</button>
-    </div>
+        <!-- Joystick Graphics -->
+        <div id="joystick-base"><div id="joystick-knob"></div></div>
 
-    <div id="admin-modal">
-        <div class="modal-box">
-            <h3 style="color:#00ff00; margin-top:0;">GOD MODE</h3>
-            <input type="password" id="admin-code" class="modal-inp" maxlength="4">
-            <br>
-            <button class="modal-btn" onclick="verifyAdmin()">ACCESS</button>
-            <button class="modal-btn" style="background:#333; color:#fff" onclick="closeModal()">CANCEL</button>
-        </div>
+        <!-- Buttons -->
+        <div id="btn-jump" class="btn">JUMP</div>
+        <div id="btn-reload" class="btn">RELOAD</div>
+        <div id="btn-fire" class="btn">FIRE</div>
     </div>
 
 <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyBJ6YSWR1CkjCc58fRopdWtiuI_NGedUEo",
-      authDomain: "gemini-multiplayer-948fe.firebaseapp.com",
-      databaseURL: "https://gemini-multiplayer-948fe-default-rtdb.firebaseio.com",
-      projectId: "gemini-multiplayer-948fe",
-      storageBucket: "gemini-multiplayer-948fe.firebasestorage.app",
-      messagingSenderId: "312734987383",
-      appId: "1:312734987383:web:2aa0ea9caa5f0c8cfd8272"
+    /**
+     * RUST: MOBILE WARFARE
+     * High-End Single File Implementation
+     */
+
+    // --- CONFIG ---
+    const SETTINGS = {
+        sensitivity: 0.003, // Camera sensitivity
+        playerSpeed: 10,
+        jumpForce: 10,
+        botCount: 5
     };
 
-    let db, playersRef, chatRef;
-    try {
-        firebase.initializeApp(firebaseConfig);
-        db = firebase.database();
-        playersRef = db.ref("players");
-        chatRef = db.ref("chat");
-    } catch(e) { console.error(e); }
-
-    const myId = "P_" + Math.floor(Math.random()*100000);
-    // REMOVES CLONES ON EXIT
-    if(playersRef) playersRef.child(myId).onDisconnect().remove();
-
-    const joinTime = Date.now();
-    let scene, camera, renderer, world, playerBody;
-    let pitchObj = new THREE.Object3D(), yawObj = new THREE.Object3D();
-    let otherPlayers = {};
-    let shootableMeshes = [];
+    // --- GLOBALS ---
+    let scene, camera, renderer, world;
+    let playerBody;
+    const objects = [];
+    const bots = [];
+    let lastTime;
     
-    // Audio Context
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
-    // Stats
-    let hp = 100;
-    let ammo = 30;
-    const MAX_AMMO = 30;
-    let isScoped = false, isGodMode = false, isDead = false;
-    let lastShot = 0;
-    let isChatOpen = false;
-    
-    // Controls
-    let move = { f:0, b:0, l:0, r:0 };
-    let touchData = { moveId:null, lookId:null, startX:0, startY:0, lookX:0, lookY:0 };
+    // Input State
+    const input = {
+        move: { x: 0, y: 0, active: false, originX: 0, originY: 0 },
+        look: { x: 0, y: 0, active: false, lastX: 0, lastY: 0 },
+        shooting: false
+    };
 
-    // --- AUDIO SYSTEM ---
-    function playPew() {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.1);
-    }
+    // Player Euler Angles for Camera
+    const pitch = new THREE.Object3D(); // Up/Down
+    const yaw = new THREE.Object3D();   // Left/Right
 
-    // --- TEXTURES ---
-    function genTex(color, type='solid') {
-        const c = document.createElement('canvas'); c.width=64; c.height=64;
-        const x = c.getContext('2d');
-        x.fillStyle = color; x.fillRect(0,0,64,64);
-        if(type==='grid') {
-            x.strokeStyle = 'rgba(0,0,0,0.2)'; x.lineWidth=2;
-            x.strokeRect(0,0,64,64);
-        } else if (type==='noise') {
-            x.fillStyle = "rgba(0,0,0,0.1)";
-            for(let i=0;i<100;i++) x.fillRect(Math.random()*64,Math.random()*64,2,2);
-        } else if (type==='box') {
-             x.fillStyle = "#8d6e63"; x.fillRect(0,0,64,64);
-             x.fillStyle = "#5d4037"; x.fillRect(5,5,54,54);
-             x.fillStyle = "#a1887f"; x.fillRect(10,10,44,44);
-             x.fillStyle = "yellow"; x.font="20px Arial"; x.fillText("AM", 10, 40);
+    // --- TEXTURE GENERATOR (HD Realistic Look without External Assets) ---
+    function createTexture(color, noise = 0.2) {
+        const size = 512;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = color;
+        ctx.fillRect(0,0,size,size);
+        
+        // Add Noise
+        for(let i=0; i<40000; i++) {
+            ctx.fillStyle = `rgba(0,0,0,${Math.random() * noise})`;
+            ctx.fillRect(Math.random()*size, Math.random()*size, 2, 2);
+            ctx.fillStyle = `rgba(255,255,255,${Math.random() * (noise/2)})`;
+            ctx.fillRect(Math.random()*size, Math.random()*size, 2, 2);
         }
-        const t = new THREE.CanvasTexture(c);
-        t.magFilter = THREE.NearestFilter;
-        return t;
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        return tex;
     }
 
-    // --- PLAYER MODEL BUILDER ---
-    function createPlayerMesh() {
-        const group = new THREE.Group();
-        
-        const matBody = new THREE.MeshLambertMaterial({color:0x0000ff});
-        const matHead = new THREE.MeshLambertMaterial({color:0xffff00});
-        const matLimb = new THREE.MeshLambertMaterial({color:0x00aa00});
+    const texGround = createTexture('#3b6e3b', 0.3);
+    const texWood = createTexture('#5d4037', 0.4);
+    const texStone = createTexture('#7f8c8d', 0.2);
 
-        const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1.5, 0.5), matBody);
-        body.position.y = 0.75;
-        group.add(body);
-
-        const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), matHead);
-        head.position.y = 1.9;
-        group.add(head);
-
-        const legGeo = new THREE.BoxGeometry(0.4, 1.5, 0.4);
-        const legL = new THREE.Mesh(legGeo, matLimb); legL.position.set(-0.3, 0, 0); legL.name="LegL";
-        const legR = new THREE.Mesh(legGeo, matLimb); legR.position.set(0.3, 0, 0); legR.name="LegR";
-        
-        const legGroup = new THREE.Group();
-        legGroup.add(legL); legGroup.add(legR);
-        group.add(legGroup);
-
-        return { mesh: group, legL: legL, legR: legR };
-    }
-
-    // --- INIT ---
+    // --- INIT GAME ---
     function init() {
+        // 1. Setup Three.js
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB);
-        scene.fog = new THREE.Fog(0x87CEEB, 20, 120);
+        scene.fog = new THREE.Fog(0x87CEEB, 10, 80);
 
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         
-        world = new CANNON.World();
-        world.gravity.set(0, -30, 0); // INCREASED GRAVITY
-        const pMat = new CANNON.Material();
-        // FRICTION ZERO FIXES SLOW MOVEMENT
-        world.addContactMaterial(new CANNON.ContactMaterial(pMat, pMat, { friction: 0.0, restitution: 0.0 }));
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.getElementById('game-container').appendChild(renderer.domElement);
 
-        // Player
-        const shape = new CANNON.Sphere(1);
-        playerBody = new CANNON.Body({ mass: 60, material: pMat, fixedRotation: true });
+        // Lighting
+        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambient);
+        const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+        sun.position.set(50, 100, 50);
+        sun.castShadow = true;
+        sun.shadow.mapSize.width = 2048;
+        sun.shadow.mapSize.height = 2048;
+        sun.shadow.camera.near = 0.5;
+        sun.shadow.camera.far = 500;
+        sun.shadow.camera.left = -100;
+        sun.shadow.camera.right = 100;
+        sun.shadow.camera.top = 100;
+        sun.shadow.camera.bottom = -100;
+        scene.add(sun);
+
+        // 2. Setup Physics (Cannon.js)
+        world = new CANNON.World();
+        world.gravity.set(0, -9.82 * 2, 0); // Higher gravity for snappier feel
+        world.broadphase = new CANNON.NaiveBroadphase();
+        world.solver.iterations = 10;
+
+        // Materials
+        const physMat = new CANNON.Material('ground');
+        const playerMat = new CANNON.Material('player');
+        const contact = new CANNON.ContactMaterial(physMat, playerMat, { friction: 0.0, restitution: 0.0 });
+        world.addContactMaterial(contact);
+
+        // Ground
+        const groundBody = new CANNON.Body({ mass: 0, material: physMat });
+        groundBody.addShape(new CANNON.Plane());
+        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
+        world.addBody(groundBody);
+
+        // Visual Ground (Repeated Texture)
+        const groundGeo = new THREE.PlaneGeometry(200, 200);
+        texGround.repeat.set(50, 50);
+        const groundMesh = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ map: texGround }));
+        groundMesh.rotation.x = -Math.PI/2;
+        groundMesh.receiveShadow = true;
+        scene.add(groundMesh);
+
+        // 3. Create Player
+        createPlayer();
+
+        // 4. Create World (Map)
+        createMap();
+
+        // 5. Create Bots
+        for(let i=0; i<SETTINGS.botCount; i++) spawnBot();
+
+        // 6. Controls Setup
+        setupControls();
+
+        // 7. Start Loop
+        requestAnimationFrame(animate);
+    }
+
+    function createPlayer() {
+        // Physics Body (Capsule simulation via Sphere)
+        const shape = new CANNON.Sphere(0.8); 
+        playerBody = new CANNON.Body({ mass: 70, material: new CANNON.Material() });
         playerBody.addShape(shape);
-        playerBody.position.set(0, 50, 0);
-        playerBody.linearDamping = 0.01; // FIXED: WAS 0.9 (Too floaty)
+        playerBody.position.set(0, 5, 0);
+        playerBody.linearDamping = 0.9; // Stops sliding
+        playerBody.angularDamping = 1.0; // Prevent rolling
+        playerBody.fixedRotation = true;
         world.addBody(playerBody);
 
-        pitchObj.add(camera);
-        yawObj.add(pitchObj);
-        yawObj.position.y = 1.6;
-        scene.add(yawObj);
-
-        const amb = new THREE.AmbientLight(0xffffff, 0.7);
-        scene.add(amb);
-        const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-        dir.position.set(50, 100, 50);
-        scene.add(dir);
-
-        buildMap();
-
-        renderer = new THREE.WebGLRenderer({ antialias: false });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
-
-        document.getElementById('loader').style.display = 'none';
-        document.getElementById('game-ui').style.display = 'block';
-        
-        setupTouchControls();
-        setupNet();
-        update();
+        // Camera Rig
+        // We attach camera to a dummy object to handle rotations separate from physics body
+        yaw.position.copy(playerBody.position);
+        yaw.add(pitch);
+        pitch.add(camera);
+        pitch.position.y = 0.6; // Eye height
+        scene.add(yaw);
     }
 
-    function buildMap() {
-        const fTex = genTex('#2e7d32', 'grid'); fTex.repeat.set(100,100); fTex.wrapS=THREE.RepeatWrapping; fTex.wrapT=THREE.RepeatWrapping;
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(400,400), new THREE.MeshLambertMaterial({map:fTex}));
-        floor.rotation.x = -Math.PI/2;
-        scene.add(floor);
-        
-        const fBody = new CANNON.Body({mass:0, shape:new CANNON.Plane()});
-        fBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
-        world.addBody(fBody);
-
-        const wallMat = new THREE.MeshLambertMaterial({map:genTex('#5d4037', 'noise')});
-        const crateMat = new THREE.MeshBasicMaterial({map:genTex('#ffcc00', 'box')});
-        
-        for(let i=0; i<50; i++) {
-            const w = 4 + Math.random()*8;
-            const h = 4 + Math.random()*10;
-            const d = 4 + Math.random()*8;
-            const x = (Math.random()-0.5)*300;
-            const z = (Math.random()-0.5)*300;
-            
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), wallMat);
-            mesh.position.set(x, h/2, z);
+    function createMap() {
+        // Helper to create buildings
+        function createBox(x, y, z, w, h, d, tex, mass=0) {
+            const geo = new THREE.BoxGeometry(w, h, d);
+            const mat = new THREE.MeshStandardMaterial({ map: tex });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, y + h/2, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
             scene.add(mesh);
-            
-            const body = new CANNON.Body({mass:0, position:new CANNON.Vec3(x, h/2, z)});
-            body.addShape(new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2)));
+
+            const shape = new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2));
+            const body = new CANNON.Body({ mass: mass });
+            body.addShape(shape);
+            body.position.set(x, y + h/2, z);
             world.addBody(body);
-
-            if(Math.random() > 0.4) spawnAmmo(x, h + 0.5, z, crateMat);
         }
+
+        // Random Buildings
+        createBox(10, 0, -10, 4, 4, 4, texWood);
+        createBox(-15, 0, -15, 6, 5, 6, texWood);
+        createBox(20, 0, 20, 8, 3, 8, texStone);
+        createBox(-20, 0, 20, 4, 6, 4, texWood);
         
-        for(let i=0; i<20; i++) spawnAmmo((Math.random()-0.5)*300, 0.5, (Math.random()-0.5)*300, crateMat);
+        // Obstacles
+        createBox(5, 0, 5, 2, 2, 2, texStone);
+        createBox(-5, 0, 10, 3, 1, 3, texStone);
+
+        // Walls (Arena)
+        createBox(0, 0, -50, 100, 10, 2, texStone);
+        createBox(0, 0, 50, 100, 10, 2, texStone);
+        createBox(-50, 0, 0, 2, 10, 100, texStone);
+        createBox(50, 0, 0, 2, 10, 100, texStone);
     }
-    
-    let pickups = [];
-    function spawnAmmo(x, y, z, mat) {
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), mat);
-        mesh.position.set(x, y, z);
+
+    function spawnBot() {
+        const geo = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
+        const mat = new THREE.MeshStandardMaterial({ color: 0xe74c3c });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.castShadow = true;
         scene.add(mesh);
-        const body = new CANNON.Body({mass:0, position:new CANNON.Vec3(x, y, z)});
-        body.addShape(new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5)));
+
+        const shape = new CANNON.Sphere(0.6);
+        const body = new CANNON.Body({ mass: 50 });
+        body.addShape(shape);
+        
+        // Random Pos
+        const x = (Math.random() - 0.5) * 80;
+        const z = (Math.random() - 0.5) * 80;
+        body.position.set(x, 5, z);
+        body.linearDamping = 0.5;
         world.addBody(body);
-        pickups.push({mesh:mesh, body:body, active:true});
+
+        bots.push({ mesh, body, dir: Math.random() * Math.PI * 2, changeTimer: 0 });
     }
 
-    // --- NETWORKING ---
-    function setupNet() {
-        setInterval(() => {
-            if(!isDead) {
-                playersRef.child(myId).update({
-                    x: playerBody.position.x,
-                    y: playerBody.position.y,
-                    z: playerBody.position.z,
-                    rot: yawObj.rotation.y,
-                    moving: (move.f||move.b||move.l||move.r)
-                });
-            }
-        }, 50);
+    // --- CONTROLS LOGIC (MOBILE FPS STYLE) ---
+    function setupControls() {
+        const leftZone = document.getElementById('zone-left');
+        const rightZone = document.getElementById('zone-right');
+        const joyBase = document.getElementById('joystick-base');
+        const joyKnob = document.getElementById('joystick-knob');
 
-        playersRef.on("value", snap => {
-            const d = snap.val() || {};
-            for(let id in otherPlayers) if(!d[id]) { scene.remove(otherPlayers[id].root); delete otherPlayers[id]; }
-            for(let id in d) {
-                if(id === myId) continue;
-                if(!otherPlayers[id]) {
-                    const pObj = createPlayerMesh();
-                    scene.add(pObj.mesh);
-                    pObj.mesh.userData = { id: id };
-                    shootableMeshes.push(pObj.mesh);
-                    otherPlayers[id] = { root: pObj.mesh, legL: pObj.legL, legR: pObj.legR };
-                }
-                const p = otherPlayers[id];
-                const data = d[id];
-                p.root.position.lerp(new THREE.Vector3(data.x, data.y, data.z), 0.3);
-                p.root.rotation.y = data.rot;
-                
-                if(data.moving) {
-                    const t = Date.now() * 0.01;
-                    p.legL.rotation.x = Math.sin(t) * 0.5;
-                    p.legR.rotation.x = -Math.sin(t) * 0.5;
-                } else {
-                    p.legL.rotation.x = 0;
-                    p.legR.rotation.x = 0;
-                }
-            }
-        });
-
-        // Damage Listener with Visuals
-        playersRef.child(myId).child("hits").on("child_added", (snap) => {
-            if(isGodMode || isDead) return;
-            const dmg = snap.val();
-            hp -= dmg;
-            document.getElementById('hp-val').innerText = hp;
-            
-            // RED SCREEN FLASH
-            const overlay = document.getElementById('damage-overlay');
-            overlay.style.opacity = 0.8;
-            setTimeout(() => overlay.style.opacity = 0, 200);
-
-            snap.ref.remove();
-            
-            if(hp <= 0) die();
-        });
-
-        chatRef.limitToLast(10).on("child_added", s => {
-            const v = s.val();
-            if(v.time < joinTime) return;
-            if(!isChatOpen) createToast(`${v.id.substr(0,4)}: ${v.msg}`);
-            const d = document.createElement('div');
-            d.innerHTML = `<b style="color:${v.id===myId?'lime':'orange'}">${v.id.substr(0,4)}:</b> ${v.msg}`;
-            document.getElementById('chat-msgs').append(d);
-            document.getElementById('chat-msgs').scrollTop = 9999;
-        });
-        
-        document.getElementById('chat-send').onclick = () => {
-            const t = document.getElementById('chat-input').value;
-            if(t) { chatRef.push({id:myId, msg:t, time:Date.now()}); document.getElementById('chat-input').value=''; }
-        }
-    }
-
-    // --- COMBAT ---
-    function fireBullet() {
-        const now = Date.now();
-        if(now - lastShot < 150) return;
-        lastShot = now;
-
-        if(ammo > 0) {
-            playPew();
-            if(!isGodMode) { ammo--; document.getElementById('ammo-val').innerText = ammo; }
-            
-            pitchObj.rotation.x += 0.04;
-
-            const ray = new THREE.Raycaster();
-            ray.setFromCamera(new THREE.Vector2(0,0), camera);
-            
-            let targets = [];
-            Object.values(otherPlayers).forEach(p => targets.push(p.root));
-            
-            const intersects = ray.intersectObjects(targets, true);
-            
-            if(intersects.length > 0) {
-                let hitObj = intersects[0].object;
-                while(hitObj.parent && !hitObj.userData.id) hitObj = hitObj.parent;
-                
-                if(hitObj.userData.id) {
-                    playersRef.child(hitObj.userData.id).child("hits").push(15);
-                    
-                    // HIT MARKER ANIMATION
-                    const hm = document.getElementById('hit-marker');
-                    hm.style.display = 'block';
-                    setTimeout(() => hm.style.display = 'none', 100);
-                }
-            }
-        }
-    }
-
-    function die() {
-        isDead = true;
-        document.getElementById('game-ui').style.display = 'none';
-        document.getElementById('death-screen').style.display = 'flex';
-        playersRef.child(myId).remove();
-    }
-
-    window.respawn = function() {
-        isDead = false;
-        hp = 100; ammo = 30;
-        document.getElementById('hp-val').innerText = hp;
-        document.getElementById('ammo-val').innerText = ammo;
-        playerBody.position.set((Math.random()-0.5)*200, 50, (Math.random()-0.5)*200);
-        playerBody.velocity.set(0,0,0);
-        document.getElementById('death-screen').style.display = 'none';
-        document.getElementById('game-ui').style.display = 'block';
-    }
-
-    // --- CONTROLS ---
-    function setupTouchControls() {
-        const joy = document.getElementById('joystick-zone');
-        const knob = document.getElementById('stick-knob');
-        
-        joy.addEventListener('touchstart', e => {
-            e.preventDefault(); const t = e.changedTouches[0];
-            touchData.moveId = t.identifier; touchData.startX = t.clientX; touchData.startY = t.clientY;
-        }, {passive:false});
-
-        joy.addEventListener('touchmove', e => {
+        // 1. MOVEMENT (Dynamic Joystick)
+        leftZone.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            for(let i=0; i<e.changedTouches.length; i++) {
-                if(e.changedTouches[i].identifier === touchData.moveId) {
-                    const t = e.changedTouches[i];
-                    let dx = t.clientX - touchData.startX, dy = t.clientY - touchData.startY;
-                    const d = Math.sqrt(dx*dx+dy*dy);
-                    if(d>40) { dx=(dx/d)*40; dy=(dy/d)*40; }
-                    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-                    move.f = dy<-10; move.b = dy>10; move.l = dx<-10; move.r = dx>10;
-                }
-            }
-        }, {passive:false});
+            const touch = e.changedTouches[0];
+            input.move.active = true;
+            input.move.originX = touch.clientX;
+            input.move.originY = touch.clientY;
+            
+            // Show Visuals
+            joyBase.style.display = 'block';
+            joyBase.style.left = touch.clientX + 'px';
+            joyBase.style.top = touch.clientY + 'px';
+            joyKnob.style.transform = `translate(-50%, -50%)`;
+        });
 
-        joy.addEventListener('touchend', e => {
-            for(let i=0; i<e.changedTouches.length; i++) {
-                if(e.changedTouches[i].identifier === touchData.moveId) {
-                    touchData.moveId = null; move={f:0,b:0,l:0,r:0};
-                    knob.style.transform = `translate(-50%, -50%)`;
-                }
+        leftZone.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if(!input.move.active) return;
+            const touch = e.changedTouches[0];
+            
+            const maxDist = 50;
+            let dx = touch.clientX - input.move.originX;
+            let dy = touch.clientY - input.move.originY;
+            
+            const dist = Math.min(maxDist, Math.sqrt(dx*dx + dy*dy));
+            const angle = Math.atan2(dy, dx);
+            
+            const moveX = Math.cos(angle) * dist;
+            const moveY = Math.sin(angle) * dist;
+
+            joyKnob.style.transform = `translate(calc(-50% + ${moveX}px), calc(-50% + ${moveY}px))`;
+            
+            // Normalize Input -1 to 1
+            input.move.x = moveX / maxDist;
+            input.move.y = moveY / maxDist;
+        });
+
+        const endMove = () => {
+            input.move.active = false;
+            input.move.x = 0;
+            input.move.y = 0;
+            joyBase.style.display = 'none';
+        };
+        leftZone.addEventListener('touchend', endMove);
+        leftZone.addEventListener('touchcancel', endMove);
+
+        // 2. LOOKING (Camera Swipe)
+        rightZone.addEventListener('touchstart', (e) => {
+            input.look.active = true;
+            input.look.lastX = e.changedTouches[0].clientX;
+            input.look.lastY = e.changedTouches[0].clientY;
+        });
+
+        rightZone.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if(!input.look.active) return;
+            const touch = e.changedTouches[0];
+            
+            const dx = touch.clientX - input.look.lastX;
+            const dy = touch.clientY - input.look.lastY;
+            
+            input.look.lastX = touch.clientX;
+            input.look.lastY = touch.clientY;
+
+            // Rotate Camera (Inverted Y axis is standard for PC, but mobile often prefers non-inverted)
+            // Let's do Standard FPS: Left swipe = Turn Left
+            yaw.rotation.y -= dx * SETTINGS.sensitivity;
+            pitch.rotation.x -= dy * SETTINGS.sensitivity;
+            
+            // Clamp Pitch (Look up/down limit)
+            pitch.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch.rotation.x));
+        });
+
+        const endLook = () => { input.look.active = false; };
+        rightZone.addEventListener('touchend', endLook);
+        rightZone.addEventListener('touchcancel', endLook);
+
+        // 3. BUTTONS
+        document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            // Only jump if touching ground (raycast or velocity check)
+            if(Math.abs(playerBody.velocity.y) < 0.1) {
+                playerBody.velocity.y = SETTINGS.jumpForce;
             }
         });
 
-        // Look
-        document.addEventListener('touchstart', e => {
-            for(let i=0; i<e.changedTouches.length; i++) {
-                const t = e.changedTouches[i];
-                // Prevent locking onto joystick
-                if(t.identifier === touchData.moveId) continue;
-
-                if(!t.target.classList.contains('action-btn')) {
-                    touchData.lookId = t.identifier; touchData.lookX = t.clientX; touchData.lookY = t.clientY;
-                }
-            }
-        }, {passive:false});
-
-        document.addEventListener('touchmove', e => {
-            for(let i=0; i<e.changedTouches.length; i++) {
-                // Ignore joystick move
-                if(e.changedTouches[i].identifier === touchData.moveId) continue;
-
-                if(e.changedTouches[i].identifier === touchData.lookId) {
-                    const t = e.changedTouches[i];
-                    yawObj.rotation.y -= (t.clientX - touchData.lookX)*0.005;
-                    pitchObj.rotation.x -= (t.clientY - touchData.lookY)*0.005;
-                    pitchObj.rotation.x = Math.max(-1.5, Math.min(1.5, pitchObj.rotation.x));
-                    touchData.lookX = t.clientX; touchData.lookY = t.clientY;
-                }
-            }
-        }, {passive:false});
-
-        document.getElementById('btn-jump').addEventListener('touchstart', e=>{ e.preventDefault(); if(playerBody.position.y < 3 || isGodMode) playerBody.velocity.y = isGodMode? 10 : 8; });
-        document.getElementById('btn-fire').addEventListener('touchstart', e=>{ e.preventDefault(); fireBullet(); });
-        document.getElementById('btn-scope').addEventListener('touchstart', e=>{ e.preventDefault(); isScoped=!isScoped; camera.fov=isScoped?30:75; camera.updateProjectionMatrix(); });
+        document.getElementById('btn-fire').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            shoot();
+        });
     }
 
-    // --- GAME LOOP ---
-    function update() {
-        requestAnimationFrame(update);
-        const dt = 1/60;
-        
-        if(!isDead) {
-            if(isGodMode) {
-                playerBody.velocity.set(0,0,0);
-                const speed = 25;
-                const dir = new THREE.Vector3();
-                if(move.f) dir.z = -1; if(move.b) dir.z = 1;
-                if(move.l) dir.x = -1; if(move.r) dir.x = 1;
-                dir.applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
-                playerBody.position.add(dir.multiplyScalar(speed * dt));
-            } else {
-                world.step(dt);
-                playerBody.mass = 60;
-                // INCREASED SPEED
-                const speed = 15; 
-                const dir = new THREE.Vector3();
-                if(move.f) dir.z = -1; if(move.b) dir.z = 1;
-                if(move.l) dir.x = -1; if(move.r) dir.x = 1;
-                dir.applyEuler(new THREE.Euler(0, yawObj.rotation.y, 0));
-                playerBody.velocity.x = dir.x * speed;
-                playerBody.velocity.z = dir.z * speed;
-            }
+    function shoot() {
+        // Visual Flash
+        const flash = document.createElement('div');
+        flash.style.position = 'absolute';
+        flash.style.top = '0'; flash.style.left = '0';
+        flash.style.width = '100%'; flash.style.height = '100%';
+        flash.style.background = 'rgba(255,255,0,0.1)';
+        flash.style.pointerEvents = 'none';
+        document.body.appendChild(flash);
+        setTimeout(() => flash.remove(), 50);
 
-            yawObj.position.copy(playerBody.position);
-            yawObj.position.y += isGodMode ? 0 : 0.6;
-            
-            pickups.forEach(p => {
-                if(p.active && playerBody.position.distanceTo(p.mesh.position) < 2) {
-                    p.active = false; scene.remove(p.mesh); world.removeBody(p.body);
-                    ammo = MAX_AMMO; document.getElementById('ammo-val').innerText = ammo;
-                }
-            });
+        // Raycast
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+        
+        // Check Hits on Bots
+        const botMeshes = bots.map(b => b.mesh);
+        const intersects = raycaster.intersectObjects(botMeshes);
+
+        if(intersects.length > 0) {
+            const hitObj = intersects[0].object;
+            // Find bot
+            const botIndex = bots.findIndex(b => b.mesh === hitObj);
+            if(botIndex > -1) {
+                // Kill Bot (Respawn)
+                const b = bots[botIndex];
+                scene.remove(b.mesh);
+                world.removeBody(b.body);
+                bots.splice(botIndex, 1);
+                
+                // Spawn new one later
+                setTimeout(spawnBot, 3000);
+                
+                // Update UI
+                document.getElementById('health-hud').innerText = "KILL +100";
+                setTimeout(() => document.getElementById('health-hud').innerText = "HP: 100/100", 1000);
+            }
         }
+    }
+
+    // --- MAIN LOOP ---
+    function animate() {
+        requestAnimationFrame(animate);
+        
+        const dt = 1/60;
+
+        // 1. Physics Step
+        world.step(dt);
+
+        // 2. Player Movement Logic
+        // Get Forward/Right vectors based on Yaw (Horizontal rotation only)
+        const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0,1,0), yaw.rotation.y);
+        const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0,1,0), yaw.rotation.y);
+
+        const moveVec = new THREE.Vector3()
+            .addScaledVector(forward, input.move.y) // Forward is -Z in logic, but Joystick Up is -Y. Logic matches if mapped right.
+            .addScaledVector(right, input.move.x);
+
+        // Apply velocity
+        playerBody.velocity.x = moveVec.x * SETTINGS.playerSpeed;
+        playerBody.velocity.z = moveVec.z * SETTINGS.playerSpeed;
+
+        // Sync Camera to Physics Body
+        yaw.position.copy(playerBody.position);
+
+        // 3. Update Bots (Simple AI)
+        bots.forEach(bot => {
+            bot.body.velocity.x = Math.cos(bot.dir) * 2;
+            bot.body.velocity.z = Math.sin(bot.dir) * 2;
+            
+            // Face direction
+            bot.mesh.position.copy(bot.body.position);
+            bot.mesh.rotation.y = -bot.dir;
+
+            // Change direction randomly
+            bot.changeTimer++;
+            if(bot.changeTimer > 60) {
+                bot.dir += (Math.random() - 0.5);
+                bot.changeTimer = 0;
+            }
+        });
+
         renderer.render(scene, camera);
     }
 
-    // --- ADMIN ---
-    window.toggleAdmin = function() {
-        if(isGodMode) {
-            isGodMode = false;
-            document.getElementById('admin-btn').innerText = "GET ADMIN";
-            document.getElementById('admin-btn').classList.remove('active');
-            document.getElementById('hp-val').innerText = hp;
-            document.getElementById('hp-val').style.color = "#ff3333";
-            ammo = Math.min(ammo, MAX_AMMO);
-            document.getElementById('ammo-val').innerText = ammo;
-        } else document.getElementById('admin-modal').style.display = 'flex';
-    }
-    window.closeModal = function() { document.getElementById('admin-modal').style.display = 'none'; }
-    window.verifyAdmin = function() {
-        if(document.getElementById('admin-code').value === "7434") {
-            isGodMode = true; closeModal();
-            document.getElementById('admin-btn').innerText = "LEAVE ADMIN";
-            document.getElementById('admin-btn').classList.add('active');
-            document.getElementById('hp-val').innerText = "GOD";
-            document.getElementById('hp-val').style.color = "#00ff00";
-            document.getElementById('ammo-val').innerText = "∞";
-            ammo = 9999;
-        } else alert("ACCESS DENIED");
-    }
+    // Handle Resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 
-    window.toggleChatUi = function() {
-        const w = document.getElementById('chat-wrap');
-        isChatOpen = !isChatOpen;
-        w.style.display = isChatOpen ? 'flex' : 'none';
-    }
-    
-    function createToast(msg) {
-        const t = document.createElement('div'); t.className = 'toast-msg'; t.innerText = msg;
-        document.getElementById('chat-toasts').appendChild(t);
-        setTimeout(()=>t.remove(), 4000);
-    }
+    init();
 
-    window.onload = init;
-    window.onresize = () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
 </script>
 </body>
 </html>
