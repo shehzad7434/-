@@ -3,17 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>WARZONE: FINAL FIXED</title>
+    <title>WARZONE: TERRAIN UPDATE</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; touch-action: none; user-select: none; font-family: 'Segoe UI', sans-serif; }
         
         /* UI LAYERS */
         #game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: none; }
         
+        /* RED DAMAGE FLASH */
+        #damage-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: red; opacity: 0; pointer-events: none; z-index: 20; transition: opacity 0.1s;
+        }
+
         /* DEATH SCREEN */
         #death-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(100, 0, 0, 0.8); z-index: 100; display: none;
+            background: rgba(50, 0, 0, 0.9); z-index: 100; display: none;
             flex-direction: column; justify-content: center; align-items: center;
         }
         #death-msg { font-size: 3rem; color: red; font-weight: 900; text-shadow: 2px 2px black; margin-bottom: 20px; }
@@ -120,7 +126,8 @@
 </head>
 <body>
 
-    <div id="loader">CONNECTING TO BATTLEFIELD...</div>
+    <div id="loader">GENERATING TERRAIN...</div>
+    <div id="damage-overlay"></div>
 
     <div id="game-ui">
         <div id="admin-btn-container"><button id="admin-btn" onclick="toggleAdmin()">ADMIN</button></div>
@@ -173,7 +180,7 @@
         db = firebase.database();
         playersRef = db.ref("players");
         chatRef = db.ref("chat");
-    } catch(e) { console.error("Firebase Error:", e); alert("Check Console for Firebase Error"); }
+    } catch(e) { console.error(e); }
 
     const myId = "P_" + Math.floor(Math.random()*100000);
     const joinTime = Date.now();
@@ -181,6 +188,7 @@
     let pitchObj = new THREE.Object3D(), yawObj = new THREE.Object3D();
     let otherPlayers = {};
     let shootableMeshes = [];
+    let particles = []; // For Blood/Effects
     
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
@@ -190,6 +198,7 @@
     let isScoped = false, isGodMode = false, isDead = false;
     let lastShot = 0;
     let isChatOpen = false;
+    let isGrounded = false; // To fix speed
     
     let move = { f:0, b:0, l:0, r:0 };
     let touchData = { moveId:null, lookId:null, startX:0, startY:0, lookX:0, lookY:0 };
@@ -200,8 +209,8 @@
         const gain = audioCtx.createGain();
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+        osc.type = 'sawtooth'; // Deeper sound
+        osc.frequency.setValueAtTime(120, audioCtx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
         gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
@@ -228,6 +237,25 @@
         const t = new THREE.CanvasTexture(c);
         t.magFilter = THREE.NearestFilter;
         return t;
+    }
+
+    // --- PARTICLE SYSTEM ---
+    function spawnParticles(pos, color, count=10) {
+        for(let i=0; i<count; i++) {
+            const mesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 0.2, 0.2),
+                new THREE.MeshBasicMaterial({color: color})
+            );
+            mesh.position.copy(pos);
+            // Random velocity
+            const vel = new THREE.Vector3(
+                (Math.random()-0.5)*0.5,
+                (Math.random())*0.5,
+                (Math.random()-0.5)*0.5
+            );
+            scene.add(mesh);
+            particles.push({ mesh: mesh, vel: vel, life: 1.0 });
+        }
     }
 
     function createPlayerMesh() {
@@ -258,7 +286,7 @@
     function init() {
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB);
-        scene.fog = new THREE.Fog(0x87CEEB, 20, 120);
+        scene.fog = new THREE.Fog(0x87CEEB, 10, 150);
 
         camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
         
@@ -271,7 +299,7 @@
         const shape = new CANNON.Sphere(1);
         playerBody = new CANNON.Body({ mass: 60, material: pMat, fixedRotation: true });
         playerBody.addShape(shape);
-        playerBody.position.set(0, 50, 0); // Sky Drop spawn
+        playerBody.position.set(0, 20, 0); 
         playerBody.linearDamping = 0.9;
         world.addBody(playerBody);
 
@@ -285,12 +313,14 @@
         scene.add(amb);
         const dir = new THREE.DirectionalLight(0xffffff, 0.8);
         dir.position.set(50, 100, 50);
+        dir.castShadow = true; // Shadows for depth
         scene.add(dir);
 
-        buildMap();
+        buildMap(); // New terrain generation
 
         renderer = new THREE.WebGLRenderer({ antialias: false });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true; // Enable shadows
         document.body.appendChild(renderer.domElement);
 
         document.getElementById('loader').style.display = 'none';
@@ -298,22 +328,71 @@
         
         setupControls();
         setupNet();
-        animate(); // Fixed: Calls animate() now
+        animate();
     }
 
+    // --- 3D TERRAIN GENERATION ---
     function buildMap() {
-        const fTex = genTex('#2e7d32', 'grid'); fTex.repeat.set(100,100); fTex.wrapS=THREE.RepeatWrapping; fTex.wrapT=THREE.RepeatWrapping;
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(400,400), new THREE.MeshLambertMaterial({map:fTex}));
-        floor.rotation.x = -Math.PI/2;
-        scene.add(floor);
+        // Floor with Heightmap logic
+        const size = 400;
+        const segments = 100;
+        const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
+        const positionAttribute = geometry.attributes.position;
+        const vertex = new THREE.Vector3();
+
+        // Add randomness to height
+        for (let i = 0; i < positionAttribute.count; i++) {
+            vertex.fromBufferAttribute(positionAttribute, i);
+            // Simple noise using Math.sin/cos for hills
+            const height = Math.sin(vertex.x * 0.05) * 2 + Math.cos(vertex.y * 0.05) * 2;
+            vertex.z = height; // PlaneGeometry is rotated later, so Z is up initially
+            positionAttribute.setXYZ(i, vertex.x, vertex.y, vertex.z);
+        }
         
+        geometry.computeVertexNormals();
+
+        const fTex = genTex('#3e6b3e', 'noise'); 
+        fTex.wrapS = THREE.RepeatWrapping; fTex.wrapT = THREE.RepeatWrapping;
+        fTex.repeat.set(50, 50);
+        
+        const material = new THREE.MeshLambertMaterial({ map: fTex });
+        const floor = new THREE.Mesh(geometry, material);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Physics for Terrain (Heightfield is hard, we use a simplified approximation or just flat + boxes)
+        // For performance in JS, we will use a flat plane for physics but visual hills.
+        // To walk on hills in CannonJS without heightfield lag:
         const fBody = new CANNON.Body({mass:0, shape:new CANNON.Plane()});
         fBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
         world.addBody(fBody);
+        
+        // Add some "hills" physics manually so you can jump on them
+        for(let i=0; i<30; i++) {
+            const r = 5 + Math.random() * 10;
+            const h = 2 + Math.random() * 4;
+            const x = (Math.random()-0.5)*300;
+            const z = (Math.random()-0.5)*300;
+            
+            // Visual Hill
+            const hillGeo = new THREE.SphereGeometry(r, 16, 8, 0, Math.PI * 2, 0, Math.PI/2);
+            const hillMat = new THREE.MeshLambertMaterial({color:0x3e6b3e});
+            const hillMesh = new THREE.Mesh(hillGeo, hillMat);
+            hillMesh.position.set(x, h/2, z);
+            scene.add(hillMesh);
+
+            // Physics Hill (Cylinder/Cone)
+            const hillBody = new CANNON.Body({mass:0});
+            hillBody.addShape(new CANNON.Cylinder(r, r, h, 8));
+            hillBody.position.set(x, h/2, z);
+            world.addBody(hillBody);
+        }
 
         const wallMat = new THREE.MeshLambertMaterial({map:genTex('#5d4037', 'noise')});
         const crateMat = new THREE.MeshBasicMaterial({map:genTex('#ffcc00', 'box')});
         
+        // Buildings
         for(let i=0; i<50; i++) {
             const w = 4 + Math.random()*8;
             const h = 4 + Math.random()*10;
@@ -323,6 +402,8 @@
             
             const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), wallMat);
             mesh.position.set(x, h/2, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
             scene.add(mesh);
             
             const body = new CANNON.Body({mass:0, position:new CANNON.Vec3(x, h/2, z)});
@@ -352,7 +433,6 @@
     }
 
     function setupNet() {
-        // Increased interval to 100ms to prevent rate limiting
         setInterval(() => {
             if(!isDead) {
                 playersRef.child(myId).update({
@@ -367,7 +447,13 @@
 
         playersRef.on("value", snap => {
             const d = snap.val() || {};
-            for(let id in otherPlayers) if(!d[id]) { scene.remove(otherPlayers[id].root); delete otherPlayers[id]; }
+            // Cleanup disconnected players
+            for(let id in otherPlayers) if(!d[id]) { 
+                scene.remove(otherPlayers[id].root); 
+                delete otherPlayers[id]; 
+            }
+            
+            // Update Existing
             for(let id in d) {
                 if(id === myId) continue;
                 if(!otherPlayers[id]) {
@@ -379,7 +465,9 @@
                 }
                 const p = otherPlayers[id];
                 const data = d[id];
-                p.root.position.lerp(new THREE.Vector3(data.x, data.y, data.z), 0.3);
+                
+                // Smooth Lerp
+                p.root.position.lerp(new THREE.Vector3(data.x, data.y, data.z), 0.2);
                 p.root.rotation.y = data.rot;
                 
                 if(data.moving) {
@@ -393,6 +481,7 @@
             }
         });
 
+        // Damage Listener (Getting Shot)
         playersRef.child(myId).child("hits").on("child_added", (snap) => {
             if(isGodMode || isDead) return;
             const dmg = snap.val();
@@ -400,6 +489,15 @@
             document.getElementById('hp-val').innerText = hp;
             snap.ref.remove();
             
+            // RED FLASH EFFECT
+            const overlay = document.getElementById('damage-overlay');
+            overlay.style.opacity = 0.5;
+            setTimeout(() => overlay.style.opacity = 0, 300);
+            
+            // Screen Shake
+            pitchObj.rotation.x += 0.1; 
+            setTimeout(() => pitchObj.rotation.x -= 0.1, 100);
+
             if(hp <= 0) die();
         });
 
@@ -428,7 +526,7 @@
             playPew();
             if(!isGodMode) { ammo--; document.getElementById('ammo-val').innerText = ammo; }
             
-            pitchObj.rotation.x += 0.04; 
+            pitchObj.rotation.x += 0.02; // Recoil
 
             const ray = new THREE.Raycaster();
             ray.setFromCamera(new THREE.Vector2(0,0), camera);
@@ -443,7 +541,11 @@
                 while(hitObj.parent && !hitObj.userData.id) hitObj = hitObj.parent;
                 
                 if(hitObj.userData.id) {
+                    // SEND HIT
                     playersRef.child(hitObj.userData.id).child("hits").push(15);
+                    
+                    // SPAWN BLOOD PARTICLES
+                    spawnParticles(intersects[0].point, 0xff0000, 5);
                 }
             }
         }
@@ -461,13 +563,12 @@
         hp = 100; ammo = 30;
         document.getElementById('hp-val').innerText = hp;
         document.getElementById('ammo-val').innerText = ammo;
-        playerBody.position.set((Math.random()-0.5)*200, 50, (Math.random()-0.5)*200);
+        playerBody.position.set((Math.random()-0.5)*200, 20, (Math.random()-0.5)*200);
         playerBody.velocity.set(0,0,0);
         document.getElementById('death-screen').style.display = 'none';
         document.getElementById('game-ui').style.display = 'block';
     }
 
-    // FIXED: Renamed function to match init() call
     function setupControls() { 
         const joy = document.getElementById('joystick-zone');
         const knob = document.getElementById('stick-knob');
@@ -500,7 +601,6 @@
             }
         });
 
-        // Look (Attached to document with passive: false)
         document.addEventListener('touchstart', e => {
             for(let i=0; i<e.changedTouches.length; i++) {
                 const t = e.changedTouches[i];
@@ -511,7 +611,7 @@
         }, {passive:false});
 
         document.addEventListener('touchmove', e => {
-            e.preventDefault(); // Prevent scrolling
+            e.preventDefault();
             for(let i=0; i<e.changedTouches.length; i++) {
                 if(e.changedTouches[i].identifier === touchData.lookId) {
                     const t = e.changedTouches[i];
@@ -523,12 +623,15 @@
             }
         }, {passive:false});
 
-        document.getElementById('btn-jump').addEventListener('touchstart', e=>{ e.preventDefault(); if(playerBody.position.y < 3 || isGodMode) playerBody.velocity.y = isGodMode? 10 : 8; });
+        document.getElementById('btn-jump').addEventListener('touchstart', e=>{ 
+            e.preventDefault(); 
+            if(playerBody.velocity.y < 0.1) // Simple ground check
+                playerBody.velocity.y = isGodMode? 15 : 10; 
+        });
         document.getElementById('btn-fire').addEventListener('touchstart', e=>{ e.preventDefault(); fireBullet(); });
         document.getElementById('btn-scope').addEventListener('touchstart', e=>{ e.preventDefault(); isScoped=!isScoped; camera.fov=isScoped?30:75; camera.updateProjectionMatrix(); });
     }
 
-    // FIXED: Renamed update to animate to match init() call
     function animate() {
         requestAnimationFrame(animate);
         const dt = 1/60;
@@ -536,7 +639,7 @@
         if(!isDead) {
             if(isGodMode) {
                 playerBody.velocity.set(0,0,0);
-                const speed = 25;
+                const speed = 40; // FASTER GOD MODE
                 const dir = new THREE.Vector3();
                 if(move.f) dir.z = -1; if(move.b) dir.z = 1;
                 if(move.l) dir.x = -1; if(move.r) dir.x = 1;
@@ -544,18 +647,36 @@
                 playerBody.position.add(dir.multiplyScalar(speed * dt));
             } else {
                 world.step(dt);
-                playerBody.mass = 60;
-                const speed = 10;
+                
+                // MOVEMENT FIX
+                const speed = 15; // Increased Base Speed
                 const dir = new THREE.Vector3();
                 if(move.f) dir.z = -1; if(move.b) dir.z = 1;
                 if(move.l) dir.x = -1; if(move.r) dir.x = 1;
+                
+                // Apply rotation only
                 dir.applyEuler(new THREE.Euler(0, yawObj.rotation.y, 0));
+                
+                // Force velocity directly for consistent speed
                 playerBody.velocity.x = dir.x * speed;
                 playerBody.velocity.z = dir.z * speed;
             }
 
             yawObj.position.copy(playerBody.position);
             yawObj.position.y += isGodMode ? 0 : 0.6;
+            
+            // Particles Update
+            for(let i=particles.length-1; i>=0; i--) {
+                const p = particles[i];
+                p.life -= 0.05;
+                p.mesh.position.add(p.vel);
+                p.mesh.rotation.x += 0.1;
+                p.mesh.scale.setScalar(p.life);
+                if(p.life <= 0) {
+                    scene.remove(p.mesh);
+                    particles.splice(i, 1);
+                }
+            }
             
             pickups.forEach(p => {
                 if(p.active && playerBody.position.distanceTo(p.mesh.position) < 2) {
