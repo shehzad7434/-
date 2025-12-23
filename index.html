@@ -308,9 +308,9 @@
         document.getElementById('loader').style.display = 'none';
         document.getElementById('game-ui').style.display = 'block';
         
-        setupControls();
+        setupTouchControls(); // FIXED: Changed from setupControls()
         setupNet();
-        animate();
+        update(); // FIXED: Changed from animate()
     }
 
     function buildMap() {
