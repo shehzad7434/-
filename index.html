@@ -2,395 +2,609 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Rust: Offline Ops</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>WARZONE: FINAL FIXED</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; font-family: 'Courier New', monospace; }
+        body { margin: 0; overflow: hidden; background: #000; touch-action: none; user-select: none; font-family: 'Segoe UI', sans-serif; }
         
-        #game { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+        /* UI LAYERS */
+        #game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: none; }
         
-        /* UI OVERLAY */
-        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-        
-        /* STATS */
-        #stats { position: absolute; top: 10px; left: 10px; color: #0f0; text-shadow: 1px 1px 0 #000; font-size: 14px; background: rgba(0,0,0,0.5); padding: 5px; }
-        #ammo { position: absolute; bottom: 20px; right: 20px; color: #ffcc00; font-size: 30px; font-weight: bold; text-shadow: 2px 2px 0 #000; }
-        
-        /* CONTROLS */
-        #controls { position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-        
-        /* BUTTONS */
-        .btn {
-            position: absolute; pointer-events: auto; background: rgba(255,255,255,0.1);
-            border: 2px solid rgba(255,255,255,0.4); color: white; font-weight: bold;
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            text-shadow: 1px 1px 2px black; backdrop-filter: blur(2px);
+        /* DEATH SCREEN */
+        #death-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(100, 0, 0, 0.8); z-index: 100; display: none;
+            flex-direction: column; justify-content: center; align-items: center;
         }
-        .btn:active { background: rgba(255,255,255,0.3); transform: scale(0.95); }
+        #death-msg { font-size: 3rem; color: red; font-weight: 900; text-shadow: 2px 2px black; margin-bottom: 20px; }
+        #respawn-btn {
+            padding: 15px 40px; background: #fff; color: #000; font-size: 1.5rem; border: none;
+            font-weight: bold; cursor: pointer; border-radius: 8px; pointer-events: auto;
+        }
 
-        #btn-fire { width: 80px; height: 80px; bottom: 40px; right: 30px; background: rgba(200, 50, 50, 0.4); }
-        #btn-jump { width: 60px; height: 60px; bottom: 150px; right: 130px; }
-        #btn-reload { width: 50px; height: 50px; bottom: 150px; right: 30px; font-size: 10px; }
+        /* ADMIN BUTTON */
+        #admin-btn-container {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            pointer-events: auto; z-index: 20;
+        }
+        #admin-btn {
+            background: rgba(0,0,0,0.6); border: 2px solid #00ff00; color: #00ff00;
+            padding: 8px 16px; font-weight: bold; border-radius: 4px; cursor: pointer;
+            font-size: 14px; text-shadow: 0 0 5px #00ff00;
+        }
+        #admin-btn.active { background: #00ff00; color: #000; box-shadow: 0 0 15px #00ff00; }
 
-        /* ZONES */
-        #zone-left { position: absolute; top: 0; left: 0; width: 50%; height: 100%; pointer-events: auto; }
-        #zone-right { position: absolute; top: 0; right: 0; width: 50%; height: 100%; pointer-events: auto; }
+        /* TOASTS */
+        #chat-toasts {
+            position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
+            width: 80%; display: flex; flex-direction: column; align-items: center; gap: 5px;
+            pointer-events: none; z-index: 30;
+        }
+        .toast-msg {
+            background: rgba(0, 0, 0, 0.7); color: #fff; padding: 5px 10px;
+            border-radius: 20px; font-size: 12px; border: 1px solid rgba(255,255,255,0.3);
+            animation: fadeOut 4s forwards;
+        }
+        @keyframes fadeOut { 0% { opacity: 0; transform: translateY(-10px); } 10% { opacity: 1; transform: translateY(0); } 90% { opacity: 1; } 100% { opacity: 0; display: none; } }
 
-        /* JOYSTICK */
-        #joy { position: absolute; width: 100px; height: 100px; background: rgba(255,255,255,0.1); border-radius: 50%; border: 2px dashed rgba(255,255,255,0.3); transform: translate(-50%, -50%); display: none; pointer-events: none; }
-        #knob { position: absolute; width: 40px; height: 40px; background: rgba(255,255,255,0.5); border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 5px #000; }
+        /* CHAT */
+        #chat-toggle {
+            position: absolute; top: 10px; left: 10px; pointer-events: auto;
+            width: 40px; height: 40px; background: rgba(0,0,0,0.5); border: 1px solid #fff;
+            border-radius: 50%; display: flex; justify-content: center; align-items: center;
+            color: #fff; font-size: 20px; z-index: 25; cursor: pointer;
+        }
+        #chat-wrap {
+            position: absolute; top: 60px; left: 10px; width: 250px; height: 150px;
+            pointer-events: auto; display: none; flex-direction: column; z-index: 25;
+            background: rgba(0,0,0,0.8); border: 1px solid #555; border-radius: 8px;
+        }
+        #chat-msgs { flex: 1; overflow-y: auto; color: #fff; font-size: 12px; padding: 5px; scrollbar-width: none; }
+        #chat-input-row { display: flex; padding: 5px; border-top: 1px solid #444; }
+        #chat-input { flex: 1; background: rgba(255,255,255,0.1); border: none; color: white; padding: 4px; border-radius: 4px; outline: none; }
+        #chat-send { background: #00ff00; border: none; padding: 0 10px; font-weight: bold; border-radius: 4px; margin-left: 5px; cursor: pointer; }
 
-        /* MINIMAP */
-        #minimap { position: absolute; top: 10px; right: 10px; width: 100px; height: 100px; border: 2px solid #fff; background: rgba(0,0,0,0.7); opacity: 0.8; }
+        /* HUD */
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); pointer-events: none; }
+        .ch-line { position: absolute; background: #fff; box-shadow: 0 0 2px #000; }
+        .ch-h { width: 20px; height: 2px; top: 9px; left: 0; }
+        .ch-v { width: 2px; height: 20px; top: 0; left: 9px; }
+
+        .hud-stats { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; }
+        .stat-box { font-size: 1.2rem; font-weight: bold; text-shadow: 1px 1px 2px #000; white-space: nowrap; }
+        .hp { color: #ff3333; } .ammo { color: #ffcc00; }
+
+        /* CONTROLS */
+        #joystick-zone {
+            position: absolute; bottom: 30px; left: 30px; width: 120px; height: 120px;
+            background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 50%; pointer-events: auto; touch-action: none;
+        }
+        #stick-knob {
+            position: absolute; top: 50%; left: 50%; width: 50px; height: 50px;
+            background: rgba(255,255,255,0.5); border-radius: 50%;
+            transform: translate(-50%, -50%); pointer-events: none;
+        }
+        .action-btn {
+            position: absolute; border-radius: 50%; pointer-events: auto;
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; color: white; backdrop-filter: blur(4px); touch-action: none;
+        }
+        #btn-fire { bottom: 50px; right: 30px; width: 80px; height: 80px; background: rgba(255, 50, 50, 0.4); border: 3px solid red; }
+        #btn-fire:active { background: rgba(255, 50, 50, 0.8); }
+        #btn-jump { bottom: 150px; right: 40px; width: 60px; height: 60px; background: rgba(255,255,255,0.2); border: 2px solid #fff; }
+        #btn-scope { bottom: 60px; right: 130px; width: 50px; height: 50px; background: rgba(255,255,255,0.2); border: 2px solid #fff; font-size: 10px; }
+
+        /* LOADING */
+        #loader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #111; display: flex; justify-content: center; align-items: center;
+            color: #00ff00; font-family: monospace; font-size: 20px; z-index: 100;
+        }
+
+        /* ADMIN MODAL */
+        #admin-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal-box { background: #111; padding: 20px; border: 1px solid #00ff00; text-align: center; border-radius: 8px; }
+        .modal-inp { padding: 10px; background: #000; border: 1px solid #333; color: #00ff00; text-align: center; font-size: 18px; width: 150px; }
+        .modal-btn { padding: 10px 20px; background: #00ff00; color: #000; border: none; font-weight: bold; margin-top: 10px; cursor: pointer; }
     </style>
+    
+    <!-- LIBRARIES -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body>
 
-    <!-- MAIN RENDER CANVAS -->
-    <canvas id="game"></canvas>
-    
-    <!-- MINIMAP CANVAS -->
-    <canvas id="minimap"></canvas>
+    <div id="loader">CONNECTING TO BATTLEFIELD...</div>
 
-    <div id="ui">
-        <div id="stats">FPS: 60 | HP: 100%</div>
-        <div id="ammo">30/90</div>
+    <div id="game-ui">
+        <div id="admin-btn-container"><button id="admin-btn" onclick="toggleAdmin()">ADMIN</button></div>
+        <div class="hud-stats">
+            <div class="stat-box hp">HP: <span id="hp-val">100</span></div>
+            <div class="stat-box ammo">AMMO: <span id="ammo-val">30</span></div>
+        </div>
+        <div id="crosshair"><div class="ch-line ch-h"></div><div class="ch-line ch-v"></div></div>
+        <div id="chat-toasts"></div>
+        <div id="chat-toggle" onclick="toggleChatUi()">💬</div>
+        <div id="chat-wrap">
+            <div id="chat-msgs"></div>
+            <div id="chat-input-row"><input type="text" id="chat-input" placeholder="Say something..."><button id="chat-send">></button></div>
+        </div>
+        <div id="joystick-zone"><div id="stick-knob"></div></div>
+        <div id="btn-fire" class="action-btn"></div>
+        <div id="btn-jump" class="action-btn">JUMP</div>
+        <div id="btn-scope" class="action-btn">AIM</div>
+    </div>
 
-        <div id="zone-left"></div>
-        <div id="zone-right"></div>
-        <div id="joy"><div id="knob"></div></div>
+    <div id="death-screen">
+        <div id="death-msg">YOU DIED</div>
+        <button id="respawn-btn" onclick="respawn()">PLAY AGAIN</button>
+    </div>
 
-        <div id="btn-fire" class="btn">FIRE</div>
-        <div id="btn-jump" class="btn">JUMP</div>
-        <div id="btn-reload" class="btn">RELOAD</div>
+    <div id="admin-modal">
+        <div class="modal-box">
+            <h3 style="color:#00ff00; margin-top:0;">GOD MODE</h3>
+            <input type="password" id="admin-code" class="modal-inp" maxlength="4">
+            <br>
+            <button class="modal-btn" onclick="verifyAdmin()">ACCESS</button>
+            <button class="modal-btn" style="background:#333; color:#fff" onclick="closeModal()">CANCEL</button>
+        </div>
     </div>
 
 <script>
-/**
- * CUSTOM RAYCASTING ENGINE (Like Doom/Wolfenstein)
- * Guarantees 100% functionality on all devices.
- */
+    const firebaseConfig = {
+      apiKey: "AIzaSyBJ6YSWR1CkjCc58fRopdWtiuI_NGedUEo",
+      authDomain: "gemini-multiplayer-948fe.firebaseapp.com",
+      databaseURL: "https://gemini-multiplayer-948fe-default-rtdb.firebaseio.com",
+      projectId: "gemini-multiplayer-948fe",
+      storageBucket: "gemini-multiplayer-948fe.firebasestorage.app",
+      messagingSenderId: "312734987383",
+      appId: "1:312734987383:web:2aa0ea9caa5f0c8cfd8272"
+    };
 
-// --- CONFIG ---
-const SCREEN_W = window.innerWidth;
-const SCREEN_H = window.innerHeight;
-const FPS = 60;
-const FOV = Math.PI / 3; // 60 degrees
-const BLOCK_SIZE = 64;
-const MAP_SIZE = 24;
-const TEX_SIZE = 64;
-const MAX_DEPTH = 20; // Rendering distance
+    let db, playersRef, chatRef;
+    try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+        playersRef = db.ref("players");
+        chatRef = db.ref("chat");
+    } catch(e) { console.error("Firebase Error:", e); alert("Check Console for Firebase Error"); }
 
-// --- ASSETS GENERATION (Textures without external files) ---
-const textures = {};
-
-function generateTexture(type) {
-    const c = document.createElement('canvas');
-    c.width = TEX_SIZE; c.height = TEX_SIZE;
-    const x = c.getContext('2d');
+    const myId = "P_" + Math.floor(Math.random()*100000);
+    const joinTime = Date.now();
+    let scene, camera, renderer, world, playerBody;
+    let pitchObj = new THREE.Object3D(), yawObj = new THREE.Object3D();
+    let otherPlayers = {};
+    let shootableMeshes = [];
     
-    // Base
-    x.fillStyle = type === 'wall' ? '#5D4037' : (type === 'metal' ? '#555' : '#333');
-    x.fillRect(0,0,TEX_SIZE,TEX_SIZE);
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
-    // Noise/Detail
-    for(let i=0; i<400; i++) {
-        x.fillStyle = `rgba(0,0,0,${Math.random()*0.2})`;
-        const s = Math.random() * 4 + 1;
-        x.fillRect(Math.random()*TEX_SIZE, Math.random()*TEX_SIZE, s, s);
+    let hp = 100;
+    let ammo = 30;
+    const MAX_AMMO = 30;
+    let isScoped = false, isGodMode = false, isDead = false;
+    let lastShot = 0;
+    let isChatOpen = false;
+    
+    let move = { f:0, b:0, l:0, r:0 };
+    let touchData = { moveId:null, lookId:null, startX:0, startY:0, lookX:0, lookY:0 };
+
+    function playPew() {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.1);
     }
-    
-    // Specifics
-    if(type === 'wall') {
-        // Bricks
-        x.fillStyle = 'rgba(0,0,0,0.3)';
-        x.fillRect(0, 15, 64, 2);
-        x.fillRect(0, 31, 64, 2);
-        x.fillRect(0, 47, 64, 2);
-        x.fillRect(30, 0, 2, 15);
-        x.fillRect(10, 15, 2, 16);
+
+    function genTex(color, type='solid') {
+        const c = document.createElement('canvas'); c.width=64; c.height=64;
+        const x = c.getContext('2d');
+        x.fillStyle = color; x.fillRect(0,0,64,64);
+        if(type==='grid') {
+            x.strokeStyle = 'rgba(0,0,0,0.2)'; x.lineWidth=2;
+            x.strokeRect(0,0,64,64);
+        } else if (type==='noise') {
+            x.fillStyle = "rgba(0,0,0,0.1)";
+            for(let i=0;i<100;i++) x.fillRect(Math.random()*64,Math.random()*64,2,2);
+        } else if (type==='box') {
+             x.fillStyle = "#8d6e63"; x.fillRect(0,0,64,64);
+             x.fillStyle = "#5d4037"; x.fillRect(5,5,54,54);
+             x.fillStyle = "#a1887f"; x.fillRect(10,10,44,44);
+             x.fillStyle = "yellow"; x.font="20px Arial"; x.fillText("AM", 10, 40);
+        }
+        const t = new THREE.CanvasTexture(c);
+        t.magFilter = THREE.NearestFilter;
+        return t;
     }
-    
-    const img = new Image();
-    img.src = c.toDataURL();
-    return img;
-}
 
-textures.wall = generateTexture('wall');
-textures.metal = generateTexture('metal');
+    function createPlayerMesh() {
+        const group = new THREE.Group();
+        const matBody = new THREE.MeshLambertMaterial({color:0x0000ff});
+        const matHead = new THREE.MeshLambertMaterial({color:0xffff00});
+        const matLimb = new THREE.MeshLambertMaterial({color:0x00aa00});
 
-// --- GAME STATE ---
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d', { alpha: false }); // Optimize
-canvas.width = SCREEN_W;
-canvas.height = SCREEN_H;
+        const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1.5, 0.5), matBody);
+        body.position.y = 0.75;
+        group.add(body);
 
-const miniCanvas = document.getElementById('minimap');
-const miniCtx = miniCanvas.getContext('2d');
-miniCanvas.width = MAP_SIZE * 10;
-miniCanvas.height = MAP_SIZE * 10;
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), matHead);
+        head.position.y = 1.9;
+        group.add(head);
 
-// Player
-const player = {
-    x: 3.5, y: 3.5,
-    dir: 0, // Angle
-    speed: 0.05,
-    rotSpeed: 0.05,
-    z: 0, // Height for jumping
-    vz: 0 // Vertical velocity
-};
+        const legGeo = new THREE.BoxGeometry(0.4, 1.5, 0.4);
+        const legL = new THREE.Mesh(legGeo, matLimb); legL.position.set(-0.3, 0, 0); legL.name="LegL";
+        const legR = new THREE.Mesh(legGeo, matLimb); legR.position.set(0.3, 0, 0); legR.name="LegR";
+        
+        const legGroup = new THREE.Group();
+        legGroup.add(legL); legGroup.add(legR);
+        group.add(legGroup);
 
-// Map (1 = Wall, 0 = Empty)
-const worldMap = [];
-for(let y=0; y<MAP_SIZE; y++) {
-    const row = [];
-    for(let x=0; x<MAP_SIZE; x++) {
-        // Border walls + random blocks
-        if(x===0 || x===MAP_SIZE-1 || y===0 || y===MAP_SIZE-1) row.push(1);
-        else if (Math.random() > 0.85) row.push(1);
-        else row.push(0);
+        return { mesh: group, legL: legL, legR: legR };
     }
-    worldMap.push(row);
-}
 
-// Input
-const input = {
-    move: { x: 0, y: 0, active: false, ox: 0, oy: 0 },
-    look: { x: 0, active: false, lx: 0 }
-};
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 20, 120);
 
-// --- CONTROLS (Touch) ---
-const joy = document.getElementById('joy');
-const knob = document.getElementById('knob');
-const zL = document.getElementById('zone-left');
-const zR = document.getElementById('zone-right');
-
-// Joystick Logic
-zL.addEventListener('touchstart', e => {
-    const t = e.changedTouches[0];
-    input.move.active = true;
-    input.move.ox = t.clientX;
-    input.move.oy = t.clientY;
-    joy.style.display = 'block';
-    joy.style.left = t.clientX + 'px';
-    joy.style.top = t.clientY + 'px';
-    knob.style.transform = `translate(-50%, -50%)`;
-});
-
-zL.addEventListener('touchmove', e => {
-    e.preventDefault();
-    if(!input.move.active) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - input.move.ox;
-    const dy = t.clientY - input.move.oy;
-    
-    const dist = Math.min(40, Math.sqrt(dx*dx + dy*dy));
-    const angle = Math.atan2(dy, dx);
-    const mx = Math.cos(angle) * dist;
-    const my = Math.sin(angle) * dist;
-    
-    knob.style.transform = `translate(calc(-50% + ${mx}px), calc(-50% + ${my}px))`;
-    
-    // Normalize -1 to 1
-    input.move.x = mx / 40;
-    input.move.y = my / 40;
-});
-
-const endMove = () => {
-    input.move.active = false; input.move.x = 0; input.move.y = 0;
-    joy.style.display = 'none';
-};
-zL.addEventListener('touchend', endMove);
-
-// Look Logic
-zR.addEventListener('touchstart', e => { input.look.active = true; input.look.lx = e.changedTouches[0].clientX; });
-zR.addEventListener('touchmove', e => {
-    e.preventDefault();
-    if(!input.look.active) return;
-    const dx = e.changedTouches[0].clientX - input.look.lx;
-    input.look.lx = e.changedTouches[0].clientX;
-    player.dir -= dx * 0.005;
-});
-zR.addEventListener('touchend', () => { input.look.active = false; });
-
-// Buttons
-document.getElementById('btn-jump').addEventListener('touchstart', e => {
-    e.preventDefault();
-    if(player.z <= 0) player.vz = 0.3; // Jump force
-});
-
-document.getElementById('btn-fire').addEventListener('touchstart', e => {
-    e.preventDefault();
-    // Recoil
-    player.z += 5; 
-    // Shoot effect handled in render
-});
-
-// --- ENGINE CORE ---
-function update() {
-    // Jump Physics
-    player.z += player.vz;
-    player.vz -= 0.015; // Gravity
-    if(player.z < 0) { player.z = 0; player.vz = 0; }
-
-    // Move
-    const moveStep = player.speed * (input.move.y < 0 ? 1 : 0.5); // Backward slower
-    const strafeStep = player.speed * 0.8;
-    
-    const newX = player.x + Math.cos(player.dir) * input.move.y * moveStep - Math.cos(player.dir + Math.PI/2) * input.move.x * strafeStep;
-    const newY = player.y + Math.sin(player.dir) * input.move.y * moveStep - Math.sin(player.dir + Math.PI/2) * input.move.x * strafeStep;
-
-    // Collision (Simple Box Check)
-    if(worldMap[Math.floor(newY)][Math.floor(player.x)] === 0) player.y = newY;
-    if(worldMap[Math.floor(player.y)][Math.floor(newX)] === 0) player.x = newX;
-}
-
-function render() {
-    // 1. Sky & Floor (Gradient)
-    const skyGrad = ctx.createLinearGradient(0, 0, 0, SCREEN_H);
-    skyGrad.addColorStop(0, '#87CEEB');
-    skyGrad.addColorStop(0.5, '#E0F7FA');
-    ctx.fillStyle = skyGrad;
-    ctx.fillRect(0, 0, SCREEN_W, SCREEN_H / 2);
-
-    const floorGrad = ctx.createLinearGradient(0, SCREEN_H/2, 0, SCREEN_H);
-    floorGrad.addColorStop(0, '#2d5a27');
-    floorGrad.addColorStop(1, '#1a3317');
-    ctx.fillStyle = floorGrad;
-    ctx.fillRect(0, SCREEN_H / 2, SCREEN_W, SCREEN_H / 2);
-
-    // 2. Raycasting
-    const numRays = SCREEN_W; // 1 ray per pixel column (High res)
-    const startAngle = player.dir - FOV / 2;
-    const angleStep = FOV / numRays;
-
-    for(let i=0; i<numRays; i++) {
-        const rayAngle = startAngle + i * angleStep;
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
         
-        // DDA Algorithm
-        const eyeX = Math.cos(rayAngle);
-        const eyeY = Math.sin(rayAngle);
+        world = new CANNON.World();
+        world.gravity.set(0, -20, 0);
+        const pMat = new CANNON.Material();
+        world.addContactMaterial(new CANNON.ContactMaterial(pMat, pMat, { friction: 0.0, restitution: 0.0 }));
+
+        // Player
+        const shape = new CANNON.Sphere(1);
+        playerBody = new CANNON.Body({ mass: 60, material: pMat, fixedRotation: true });
+        playerBody.addShape(shape);
+        playerBody.position.set(0, 50, 0); // Sky Drop spawn
+        playerBody.linearDamping = 0.9;
+        world.addBody(playerBody);
+
+        pitchObj.add(camera);
+        yawObj.add(pitchObj);
+        yawObj.position.y = 1.6;
+        scene.add(yawObj);
+
+        // Lights
+        const amb = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(amb);
+        const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+        dir.position.set(50, 100, 50);
+        scene.add(dir);
+
+        buildMap();
+
+        renderer = new THREE.WebGLRenderer({ antialias: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'block';
         
-        let mapX = Math.floor(player.x);
-        let mapY = Math.floor(player.y);
+        setupControls();
+        setupNet();
+        animate(); // Fixed: Calls animate() now
+    }
+
+    function buildMap() {
+        const fTex = genTex('#2e7d32', 'grid'); fTex.repeat.set(100,100); fTex.wrapS=THREE.RepeatWrapping; fTex.wrapT=THREE.RepeatWrapping;
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(400,400), new THREE.MeshLambertMaterial({map:fTex}));
+        floor.rotation.x = -Math.PI/2;
+        scene.add(floor);
         
-        let deltaDistX = Math.abs(1 / eyeX);
-        let deltaDistY = Math.abs(1 / eyeY);
+        const fBody = new CANNON.Body({mass:0, shape:new CANNON.Plane()});
+        fBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
+        world.addBody(fBody);
+
+        const wallMat = new THREE.MeshLambertMaterial({map:genTex('#5d4037', 'noise')});
+        const crateMat = new THREE.MeshBasicMaterial({map:genTex('#ffcc00', 'box')});
         
-        let stepX, stepY;
-        let sideDistX, sideDistY;
-        let hit = 0;
-        let side; // 0 for NS, 1 for EW
-        
-        if(eyeX < 0) { stepX = -1; sideDistX = (player.x - mapX) * deltaDistX; }
-        else { stepX = 1; sideDistX = (mapX + 1.0 - player.x) * deltaDistX; }
-        
-        if(eyeY < 0) { stepY = -1; sideDistY = (player.y - mapY) * deltaDistY; }
-        else { stepY = 1; sideDistY = (mapY + 1.0 - player.y) * deltaDistY; }
-        
-        while(hit === 0) {
-            if(sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; }
-            else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
-            if(worldMap[mapY][mapX] > 0) hit = 1;
+        for(let i=0; i<50; i++) {
+            const w = 4 + Math.random()*8;
+            const h = 4 + Math.random()*10;
+            const d = 4 + Math.random()*8;
+            const x = (Math.random()-0.5)*300;
+            const z = (Math.random()-0.5)*300;
+            
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), wallMat);
+            mesh.position.set(x, h/2, z);
+            scene.add(mesh);
+            
+            const body = new CANNON.Body({mass:0, position:new CANNON.Vec3(x, h/2, z)});
+            body.addShape(new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2)));
+            world.addBody(body);
+
+            if(Math.random() > 0.4) {
+                spawnAmmo(x, h + 0.5, z, crateMat);
+            }
         }
         
-        let perpWallDist;
-        if(side === 0) perpWallDist = (mapX - player.x + (1 - stepX) / 2) / eyeX;
-        else perpWallDist = (mapY - player.y + (1 - stepY) / 2) / eyeY;
+        for(let i=0; i<20; i++) {
+             spawnAmmo((Math.random()-0.5)*300, 0.5, (Math.random()-0.5)*300, crateMat);
+        }
+    }
+    
+    let pickups = [];
+    function spawnAmmo(x, y, z, mat) {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), mat);
+        mesh.position.set(x, y, z);
+        scene.add(mesh);
+        const body = new CANNON.Body({mass:0, position:new CANNON.Vec3(x, y, z)});
+        body.addShape(new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5)));
+        world.addBody(body);
         
-        // Fix fisheye
-        const correctedDist = perpWallDist * Math.cos(rayAngle - player.dir);
-        
-        // Wall Height
-        const lineHeight = Math.floor(SCREEN_H / correctedDist);
-        let drawStart = -lineHeight / 2 + SCREEN_H / 2 + player.z * (SCREEN_H/correctedDist);
-        let drawEnd = lineHeight / 2 + SCREEN_H / 2 + player.z * (SCREEN_H/correctedDist);
-        
-        // Shading (Distance fog)
-        const brightness = Math.max(0, 1 - correctedDist / MAX_DEPTH);
-        ctx.globalAlpha = 1;
-        
-        // Texturing
-        let texX;
-        if(side === 0) texX = player.y + perpWallDist * eyeY;
-        else texX = player.x + perpWallDist * eyeX;
-        texX -= Math.floor(texX);
-        texX *= TEX_SIZE;
-        
-        // Get texture slice
-        const tex = textures.wall;
-        
-        // Draw Strip
-        // Performance: drawImage 1px wide strips is heavy, but necessary for textures
-        // Using fillRect is faster but flat. Let's use fillRect with color modulation for speed + texture effect
+        pickups.push({mesh:mesh, body:body, active:true});
+    }
+
+    function setupNet() {
+        // Increased interval to 100ms to prevent rate limiting
+        setInterval(() => {
+            if(!isDead) {
+                playersRef.child(myId).update({
+                    x: playerBody.position.x,
+                    y: playerBody.position.y,
+                    z: playerBody.position.z,
+                    rot: yawObj.rotation.y,
+                    moving: (move.f||move.b||move.l||move.r)
+                });
+            }
+        }, 100);
+
+        playersRef.on("value", snap => {
+            const d = snap.val() || {};
+            for(let id in otherPlayers) if(!d[id]) { scene.remove(otherPlayers[id].root); delete otherPlayers[id]; }
+            for(let id in d) {
+                if(id === myId) continue;
+                if(!otherPlayers[id]) {
+                    const pObj = createPlayerMesh();
+                    scene.add(pObj.mesh);
+                    pObj.mesh.userData = { id: id }; 
+                    shootableMeshes.push(pObj.mesh);
+                    otherPlayers[id] = { root: pObj.mesh, legL: pObj.legL, legR: pObj.legR };
+                }
+                const p = otherPlayers[id];
+                const data = d[id];
+                p.root.position.lerp(new THREE.Vector3(data.x, data.y, data.z), 0.3);
+                p.root.rotation.y = data.rot;
                 
-        ctx.fillStyle = `rgb(${Math.floor(100 * brightness)}, ${Math.floor(70 * brightness)}, ${Math.floor(50 * brightness)})`;
-        if(side === 1) ctx.fillStyle = `rgb(${Math.floor(80 * brightness)}, ${Math.floor(55 * brightness)}, ${Math.floor(40 * brightness)})`; // Darker side
+                if(data.moving) {
+                    const t = Date.now() * 0.01;
+                    p.legL.rotation.x = Math.sin(t) * 0.5;
+                    p.legR.rotation.x = -Math.sin(t) * 0.5;
+                } else {
+                    p.legL.rotation.x = 0;
+                    p.legR.rotation.x = 0;
+                }
+            }
+        });
+
+        playersRef.child(myId).child("hits").on("child_added", (snap) => {
+            if(isGodMode || isDead) return;
+            const dmg = snap.val();
+            hp -= dmg;
+            document.getElementById('hp-val').innerText = hp;
+            snap.ref.remove();
+            
+            if(hp <= 0) die();
+        });
+
+        chatRef.limitToLast(10).on("child_added", s => {
+            const v = s.val();
+            if(v.time < joinTime) return; 
+            if(!isChatOpen) createToast(`${v.id.substr(0,4)}: ${v.msg}`);
+            const d = document.createElement('div');
+            d.innerHTML = `<b style="color:${v.id===myId?'lime':'orange'}">${v.id.substr(0,4)}:</b> ${v.msg}`;
+            document.getElementById('chat-msgs').append(d);
+            document.getElementById('chat-msgs').scrollTop = 9999;
+        });
         
-        ctx.fillRect(i, drawStart, 1, drawEnd - drawStart);
-    }
-    
-    // 3. Draw Weapon (Gun)
-    const gunBob = Math.sin(Date.now() / 150) * (input.move.active ? 5 : 1); // Bobbing effect
-    const gunX = SCREEN_W / 2 - 40;
-    const gunY = SCREEN_H - 200 + gunBob + player.z; // Gun moves with jump
-    
-    // Draw Gun Body (Simple vector shapes)
-    ctx.fillStyle = '#222';
-    ctx.fillRect(gunX, gunY, 80, 100); // Handle
-    ctx.fillStyle = '#444';
-    ctx.fillRect(gunX + 10, gunY - 50, 60, 60); // Barrel
-    
-    // Muzzle Flash (Random)
-    if(Math.random() > 0.9 && player.z > 1) { // If jumping/recoiling
-        ctx.fillStyle = `rgba(255, 200, 50, ${Math.random()})`;
-        ctx.beginPath();
-        ctx.arc(SCREEN_W/2, SCREEN_H/2 - 100 + gunBob, 50 + Math.random()*20, 0, Math.PI*2);
-        ctx.fill();
-    }
-
-    drawMinimap();
-}
-
-function drawMinimap() {
-    miniCtx.fillStyle = '#000';
-    miniCtx.fillRect(0,0, miniCanvas.width, miniCanvas.height);
-    
-    const scale = 10;
-    
-    // Draw Walls
-    miniCtx.fillStyle = '#555';
-    for(let y=0; y<MAP_SIZE; y++) {
-        for(let x=0; x<MAP_SIZE; x++) {
-            if(worldMap[y][x]) miniCtx.fillRect(x*scale, y*scale, scale, scale);
+        document.getElementById('chat-send').onclick = () => {
+            const t = document.getElementById('chat-input').value;
+            if(t) { chatRef.push({id:myId, msg:t, time:Date.now()}); document.getElementById('chat-input').value=''; }
         }
     }
+
+    function fireBullet() {
+        const now = Date.now();
+        if(now - lastShot < 150) return;
+        lastShot = now;
+
+        if(ammo > 0) {
+            playPew();
+            if(!isGodMode) { ammo--; document.getElementById('ammo-val').innerText = ammo; }
+            
+            pitchObj.rotation.x += 0.04; 
+
+            const ray = new THREE.Raycaster();
+            ray.setFromCamera(new THREE.Vector2(0,0), camera);
+            
+            let targets = [];
+            Object.values(otherPlayers).forEach(p => targets.push(p.root));
+            
+            const intersects = ray.intersectObjects(targets, true);
+            
+            if(intersects.length > 0) {
+                let hitObj = intersects[0].object;
+                while(hitObj.parent && !hitObj.userData.id) hitObj = hitObj.parent;
+                
+                if(hitObj.userData.id) {
+                    playersRef.child(hitObj.userData.id).child("hits").push(15);
+                }
+            }
+        }
+    }
+
+    function die() {
+        isDead = true;
+        document.getElementById('game-ui').style.display = 'none';
+        document.getElementById('death-screen').style.display = 'flex';
+        playersRef.child(myId).remove();
+    }
+
+    window.respawn = function() {
+        isDead = false;
+        hp = 100; ammo = 30;
+        document.getElementById('hp-val').innerText = hp;
+        document.getElementById('ammo-val').innerText = ammo;
+        playerBody.position.set((Math.random()-0.5)*200, 50, (Math.random()-0.5)*200);
+        playerBody.velocity.set(0,0,0);
+        document.getElementById('death-screen').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'block';
+    }
+
+    // FIXED: Renamed function to match init() call
+    function setupControls() { 
+        const joy = document.getElementById('joystick-zone');
+        const knob = document.getElementById('stick-knob');
+        
+        joy.addEventListener('touchstart', e => {
+            e.preventDefault(); const t = e.changedTouches[0];
+            touchData.moveId = t.identifier; touchData.startX = t.clientX; touchData.startY = t.clientY;
+        }, {passive:false});
+
+        joy.addEventListener('touchmove', e => {
+            e.preventDefault();
+            for(let i=0; i<e.changedTouches.length; i++) {
+                if(e.changedTouches[i].identifier === touchData.moveId) {
+                    const t = e.changedTouches[i];
+                    let dx = t.clientX - touchData.startX, dy = t.clientY - touchData.startY;
+                    const d = Math.sqrt(dx*dx+dy*dy);
+                    if(d>40) { dx=(dx/d)*40; dy=(dy/d)*40; }
+                    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+                    move.f = dy<-10; move.b = dy>10; move.l = dx<-10; move.r = dx>10;
+                }
+            }
+        }, {passive:false});
+
+        joy.addEventListener('touchend', e => {
+            for(let i=0; i<e.changedTouches.length; i++) {
+                if(e.changedTouches[i].identifier === touchData.moveId) {
+                    touchData.moveId = null; move={f:0,b:0,l:0,r:0};
+                    knob.style.transform = `translate(-50%, -50%)`;
+                }
+            }
+        });
+
+        // Look (Attached to document with passive: false)
+        document.addEventListener('touchstart', e => {
+            for(let i=0; i<e.changedTouches.length; i++) {
+                const t = e.changedTouches[i];
+                if(t.clientX > window.innerWidth/2 && !t.target.classList.contains('action-btn')) {
+                    touchData.lookId = t.identifier; touchData.lookX = t.clientX; touchData.lookY = t.clientY;
+                }
+            }
+        }, {passive:false});
+
+        document.addEventListener('touchmove', e => {
+            e.preventDefault(); // Prevent scrolling
+            for(let i=0; i<e.changedTouches.length; i++) {
+                if(e.changedTouches[i].identifier === touchData.lookId) {
+                    const t = e.changedTouches[i];
+                    yawObj.rotation.y -= (t.clientX - touchData.lookX)*0.005;
+                    pitchObj.rotation.x -= (t.clientY - touchData.lookY)*0.005;
+                    pitchObj.rotation.x = Math.max(-1.5, Math.min(1.5, pitchObj.rotation.x));
+                    touchData.lookX = t.clientX; touchData.lookY = t.clientY;
+                }
+            }
+        }, {passive:false});
+
+        document.getElementById('btn-jump').addEventListener('touchstart', e=>{ e.preventDefault(); if(playerBody.position.y < 3 || isGodMode) playerBody.velocity.y = isGodMode? 10 : 8; });
+        document.getElementById('btn-fire').addEventListener('touchstart', e=>{ e.preventDefault(); fireBullet(); });
+        document.getElementById('btn-scope').addEventListener('touchstart', e=>{ e.preventDefault(); isScoped=!isScoped; camera.fov=isScoped?30:75; camera.updateProjectionMatrix(); });
+    }
+
+    // FIXED: Renamed update to animate to match init() call
+    function animate() {
+        requestAnimationFrame(animate);
+        const dt = 1/60;
+        
+        if(!isDead) {
+            if(isGodMode) {
+                playerBody.velocity.set(0,0,0);
+                const speed = 25;
+                const dir = new THREE.Vector3();
+                if(move.f) dir.z = -1; if(move.b) dir.z = 1;
+                if(move.l) dir.x = -1; if(move.r) dir.x = 1;
+                dir.applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+                playerBody.position.add(dir.multiplyScalar(speed * dt));
+            } else {
+                world.step(dt);
+                playerBody.mass = 60;
+                const speed = 10;
+                const dir = new THREE.Vector3();
+                if(move.f) dir.z = -1; if(move.b) dir.z = 1;
+                if(move.l) dir.x = -1; if(move.r) dir.x = 1;
+                dir.applyEuler(new THREE.Euler(0, yawObj.rotation.y, 0));
+                playerBody.velocity.x = dir.x * speed;
+                playerBody.velocity.z = dir.z * speed;
+            }
+
+            yawObj.position.copy(playerBody.position);
+            yawObj.position.y += isGodMode ? 0 : 0.6;
+            
+            pickups.forEach(p => {
+                if(p.active && playerBody.position.distanceTo(p.mesh.position) < 2) {
+                    p.active = false; scene.remove(p.mesh); world.removeBody(p.body);
+                    ammo = MAX_AMMO; document.getElementById('ammo-val').innerText = ammo;
+                }
+            });
+        }
+        renderer.render(scene, camera);
+    }
+
+    window.toggleAdmin = function() {
+        if(isGodMode) {
+            isGodMode = false;
+            document.getElementById('admin-btn').innerText = "GET ADMIN";
+            document.getElementById('admin-btn').classList.remove('active');
+            document.getElementById('hp-val').innerText = hp;
+            document.getElementById('hp-val').style.color = "#ff3333";
+            ammo = Math.min(ammo, MAX_AMMO); 
+            document.getElementById('ammo-val').innerText = ammo;
+        } else document.getElementById('admin-modal').style.display = 'flex';
+    }
+    window.closeModal = function() { document.getElementById('admin-modal').style.display = 'none'; }
+    window.verifyAdmin = function() {
+        if(document.getElementById('admin-code').value === "7434") {
+            isGodMode = true; closeModal();
+            document.getElementById('admin-btn').innerText = "LEAVE ADMIN";
+            document.getElementById('admin-btn').classList.add('active');
+            document.getElementById('hp-val').innerText = "GOD";
+            document.getElementById('hp-val').style.color = "#00ff00";
+            document.getElementById('ammo-val').innerText = "∞";
+            ammo = 9999;
+        } else alert("ACCESS DENIED");
+    }
+
+    window.toggleChatUi = function() {
+        const w = document.getElementById('chat-wrap');
+        isChatOpen = !isChatOpen;
+        w.style.display = isChatOpen ? 'flex' : 'none';
+    }
     
-    // Draw Player
-    miniCtx.fillStyle = '#f00';
-    miniCtx.beginPath();
-    miniCtx.arc(player.x*scale, player.y*scale, 3, 0, Math.PI*2);
-    miniCtx.fill();
-    
-    // View Cone
-    miniCtx.strokeStyle = 'rgba(255,255,0,0.3)';
-    miniCtx.beginPath();
-    miniCtx.moveTo(player.x*scale, player.y*scale);
-    miniCtx.lineTo((player.x + Math.cos(player.dir-FOV/2)*4)*scale, (player.y + Math.sin(player.dir-FOV/2)*4)*scale);
-    miniCtx.moveTo(player.x*scale, player.y*scale);
-    miniCtx.lineTo((player.x + Math.cos(player.dir+FOV/2)*4)*scale, (player.y + Math.sin(player.dir+FOV/2)*4)*scale);
-    miniCtx.stroke();
-}
+    function createToast(msg) {
+        const t = document.createElement('div'); t.className = 'toast-msg'; t.innerText = msg;
+        document.getElementById('chat-toasts').appendChild(t);
+        setTimeout(()=>t.remove(), 4000);
+    }
 
-function loop() {
-    update();
-    render();
-    requestAnimationFrame(loop);
-}
-
-// Start
-loop();
-
+    window.onload = init;
+    window.onresize = () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
 </script>
 </body>
 </html>
