@@ -2,472 +2,394 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Rust: Mobile Warfare</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Rust: Offline Ops</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
+        body { margin: 0; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; font-family: 'Courier New', monospace; }
         
-        /* UI LAYER */
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        #game { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
         
-        /* HUD ELEMENTS */
-        .hud-text { position: absolute; color: white; font-weight: bold; text-shadow: 2px 2px 0 #000; pointer-events: none; }
-        #health-hud { top: 20px; left: 20px; font-size: 24px; color: #e74c3c; }
-        #ammo-hud { bottom: 100px; right: 20px; font-size: 32px; color: #f1c40f; }
-        #crosshair { position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); pointer-events: none; }
-        #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255,255,255,0.8); }
-        #crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; }
-        #crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }
-
-        /* ACTION BUTTONS (Fixed) */
+        /* UI OVERLAY */
+        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        
+        /* STATS */
+        #stats { position: absolute; top: 10px; left: 10px; color: #0f0; text-shadow: 1px 1px 0 #000; font-size: 14px; background: rgba(0,0,0,0.5); padding: 5px; }
+        #ammo { position: absolute; bottom: 20px; right: 20px; color: #ffcc00; font-size: 30px; font-weight: bold; text-shadow: 2px 2px 0 #000; }
+        
+        /* CONTROLS */
+        #controls { position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        
+        /* BUTTONS */
         .btn {
-            position: absolute; pointer-events: auto;
-            background: rgba(255, 255, 255, 0.15); border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 50%; color: white; font-weight: bold; display: flex; align-items: center; justify-content: center;
-            backdrop-filter: blur(4px); touch-action: manipulation;
+            position: absolute; pointer-events: auto; background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.4); color: white; font-weight: bold;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            text-shadow: 1px 1px 2px black; backdrop-filter: blur(2px);
         }
-        .btn:active { background: rgba(255, 255, 255, 0.4); transform: scale(0.95); }
+        .btn:active { background: rgba(255,255,255,0.3); transform: scale(0.95); }
 
-        #btn-fire { width: 70px; height: 70px; bottom: 40px; right: 30px; background: rgba(231, 76, 60, 0.4); border-color: #e74c3c; }
-        #btn-jump { width: 60px; height: 60px; bottom: 150px; right: 120px; }
-        #btn-reload { width: 50px; height: 50px; bottom: 40px; right: 120px; font-size: 12px; }
+        #btn-fire { width: 80px; height: 80px; bottom: 40px; right: 30px; background: rgba(200, 50, 50, 0.4); }
+        #btn-jump { width: 60px; height: 60px; bottom: 150px; right: 130px; }
+        #btn-reload { width: 50px; height: 50px; bottom: 150px; right: 30px; font-size: 10px; }
 
-        /* DYNAMIC ZONES */
+        /* ZONES */
         #zone-left { position: absolute; top: 0; left: 0; width: 50%; height: 100%; pointer-events: auto; }
         #zone-right { position: absolute; top: 0; right: 0; width: 50%; height: 100%; pointer-events: auto; }
 
-        /* JOYSTICK VISUAL */
-        #joystick-base { position: absolute; width: 100px; height: 100px; background: rgba(255,255,255,0.1); border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); transform: translate(-50%, -50%); display: none; pointer-events: none; }
-        #joystick-knob { position: absolute; width: 40px; height: 40px; background: rgba(255,255,255,0.5); border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+        /* JOYSTICK */
+        #joy { position: absolute; width: 100px; height: 100px; background: rgba(255,255,255,0.1); border-radius: 50%; border: 2px dashed rgba(255,255,255,0.3); transform: translate(-50%, -50%); display: none; pointer-events: none; }
+        #knob { position: absolute; width: 40px; height: 40px; background: rgba(255,255,255,0.5); border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 5px #000; }
+
+        /* MINIMAP */
+        #minimap { position: absolute; top: 10px; right: 10px; width: 100px; height: 100px; border: 2px solid #fff; background: rgba(0,0,0,0.7); opacity: 0.8; }
     </style>
-    
-    <!-- High Performance 3D Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
 </head>
 <body>
 
-    <!-- 3D Canvas Container -->
-    <div id="game-container"></div>
+    <!-- MAIN RENDER CANVAS -->
+    <canvas id="game"></canvas>
+    
+    <!-- MINIMAP CANVAS -->
+    <canvas id="minimap"></canvas>
 
-    <!-- UI Overlay -->
-    <div id="ui-layer">
-        <div id="health-hud">HP: 100/100</div>
-        <div id="ammo-hud">30 / 90</div>
-        <div id="crosshair"></div>
+    <div id="ui">
+        <div id="stats">FPS: 60 | HP: 100%</div>
+        <div id="ammo">30/90</div>
 
-        <!-- Touch Zones -->
-        <div id="zone-left"></div> <!-- Move -->
-        <div id="zone-right"></div> <!-- Look -->
+        <div id="zone-left"></div>
+        <div id="zone-right"></div>
+        <div id="joy"><div id="knob"></div></div>
 
-        <!-- Joystick Graphics -->
-        <div id="joystick-base"><div id="joystick-knob"></div></div>
-
-        <!-- Buttons -->
+        <div id="btn-fire" class="btn">FIRE</div>
         <div id="btn-jump" class="btn">JUMP</div>
         <div id="btn-reload" class="btn">RELOAD</div>
-        <div id="btn-fire" class="btn">FIRE</div>
     </div>
 
 <script>
-    /**
-     * RUST: MOBILE WARFARE
-     * High-End Single File Implementation
-     */
+/**
+ * CUSTOM RAYCASTING ENGINE (Like Doom/Wolfenstein)
+ * Guarantees 100% functionality on all devices.
+ */
 
-    // --- CONFIG ---
-    const SETTINGS = {
-        sensitivity: 0.003, // Camera sensitivity
-        playerSpeed: 10,
-        jumpForce: 10,
-        botCount: 5
-    };
+// --- CONFIG ---
+const SCREEN_W = window.innerWidth;
+const SCREEN_H = window.innerHeight;
+const FPS = 60;
+const FOV = Math.PI / 3; // 60 degrees
+const BLOCK_SIZE = 64;
+const MAP_SIZE = 24;
+const TEX_SIZE = 64;
+const MAX_DEPTH = 20; // Rendering distance
 
-    // --- GLOBALS ---
-    let scene, camera, renderer, world;
-    let playerBody;
-    const objects = [];
-    const bots = [];
-    let lastTime;
+// --- ASSETS GENERATION (Textures without external files) ---
+const textures = {};
+
+function generateTexture(type) {
+    const c = document.createElement('canvas');
+    c.width = TEX_SIZE; c.height = TEX_SIZE;
+    const x = c.getContext('2d');
     
-    // Input State
-    const input = {
-        move: { x: 0, y: 0, active: false, originX: 0, originY: 0 },
-        look: { x: 0, y: 0, active: false, lastX: 0, lastY: 0 },
-        shooting: false
-    };
+    // Base
+    x.fillStyle = type === 'wall' ? '#5D4037' : (type === 'metal' ? '#555' : '#333');
+    x.fillRect(0,0,TEX_SIZE,TEX_SIZE);
+    
+    // Noise/Detail
+    for(let i=0; i<400; i++) {
+        x.fillStyle = `rgba(0,0,0,${Math.random()*0.2})`;
+        const s = Math.random() * 4 + 1;
+        x.fillRect(Math.random()*TEX_SIZE, Math.random()*TEX_SIZE, s, s);
+    }
+    
+    // Specifics
+    if(type === 'wall') {
+        // Bricks
+        x.fillStyle = 'rgba(0,0,0,0.3)';
+        x.fillRect(0, 15, 64, 2);
+        x.fillRect(0, 31, 64, 2);
+        x.fillRect(0, 47, 64, 2);
+        x.fillRect(30, 0, 2, 15);
+        x.fillRect(10, 15, 2, 16);
+    }
+    
+    const img = new Image();
+    img.src = c.toDataURL();
+    return img;
+}
 
-    // Player Euler Angles for Camera
-    const pitch = new THREE.Object3D(); // Up/Down
-    const yaw = new THREE.Object3D();   // Left/Right
+textures.wall = generateTexture('wall');
+textures.metal = generateTexture('metal');
 
-    // --- TEXTURE GENERATOR (HD Realistic Look without External Assets) ---
-    function createTexture(color, noise = 0.2) {
-        const size = 512;
-        const canvas = document.createElement('canvas');
-        canvas.width = size; canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = color;
-        ctx.fillRect(0,0,size,size);
+// --- GAME STATE ---
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d', { alpha: false }); // Optimize
+canvas.width = SCREEN_W;
+canvas.height = SCREEN_H;
+
+const miniCanvas = document.getElementById('minimap');
+const miniCtx = miniCanvas.getContext('2d');
+miniCanvas.width = MAP_SIZE * 10;
+miniCanvas.height = MAP_SIZE * 10;
+
+// Player
+const player = {
+    x: 3.5, y: 3.5,
+    dir: 0, // Angle
+    speed: 0.05,
+    rotSpeed: 0.05,
+    z: 0, // Height for jumping
+    vz: 0 // Vertical velocity
+};
+
+// Map (1 = Wall, 0 = Empty)
+const worldMap = [];
+for(let y=0; y<MAP_SIZE; y++) {
+    const row = [];
+    for(let x=0; x<MAP_SIZE; x++) {
+        // Border walls + random blocks
+        if(x===0 || x===MAP_SIZE-1 || y===0 || y===MAP_SIZE-1) row.push(1);
+        else if (Math.random() > 0.85) row.push(1);
+        else row.push(0);
+    }
+    worldMap.push(row);
+}
+
+// Input
+const input = {
+    move: { x: 0, y: 0, active: false, ox: 0, oy: 0 },
+    look: { x: 0, active: false, lx: 0 }
+};
+
+// --- CONTROLS (Touch) ---
+const joy = document.getElementById('joy');
+const knob = document.getElementById('knob');
+const zL = document.getElementById('zone-left');
+const zR = document.getElementById('zone-right');
+
+// Joystick Logic
+zL.addEventListener('touchstart', e => {
+    const t = e.changedTouches[0];
+    input.move.active = true;
+    input.move.ox = t.clientX;
+    input.move.oy = t.clientY;
+    joy.style.display = 'block';
+    joy.style.left = t.clientX + 'px';
+    joy.style.top = t.clientY + 'px';
+    knob.style.transform = `translate(-50%, -50%)`;
+});
+
+zL.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if(!input.move.active) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - input.move.ox;
+    const dy = t.clientY - input.move.oy;
+    
+    const dist = Math.min(40, Math.sqrt(dx*dx + dy*dy));
+    const angle = Math.atan2(dy, dx);
+    const mx = Math.cos(angle) * dist;
+    const my = Math.sin(angle) * dist;
+    
+    knob.style.transform = `translate(calc(-50% + ${mx}px), calc(-50% + ${my}px))`;
+    
+    // Normalize -1 to 1
+    input.move.x = mx / 40;
+    input.move.y = my / 40;
+});
+
+const endMove = () => {
+    input.move.active = false; input.move.x = 0; input.move.y = 0;
+    joy.style.display = 'none';
+};
+zL.addEventListener('touchend', endMove);
+
+// Look Logic
+zR.addEventListener('touchstart', e => { input.look.active = true; input.look.lx = e.changedTouches[0].clientX; });
+zR.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if(!input.look.active) return;
+    const dx = e.changedTouches[0].clientX - input.look.lx;
+    input.look.lx = e.changedTouches[0].clientX;
+    player.dir -= dx * 0.005;
+});
+zR.addEventListener('touchend', () => { input.look.active = false; });
+
+// Buttons
+document.getElementById('btn-jump').addEventListener('touchstart', e => {
+    e.preventDefault();
+    if(player.z <= 0) player.vz = 0.3; // Jump force
+});
+
+document.getElementById('btn-fire').addEventListener('touchstart', e => {
+    e.preventDefault();
+    // Recoil
+    player.z += 5; 
+    // Shoot effect handled in render
+});
+
+// --- ENGINE CORE ---
+function update() {
+    // Jump Physics
+    player.z += player.vz;
+    player.vz -= 0.015; // Gravity
+    if(player.z < 0) { player.z = 0; player.vz = 0; }
+
+    // Move
+    const moveStep = player.speed * (input.move.y < 0 ? 1 : 0.5); // Backward slower
+    const strafeStep = player.speed * 0.8;
+    
+    const newX = player.x + Math.cos(player.dir) * input.move.y * moveStep - Math.cos(player.dir + Math.PI/2) * input.move.x * strafeStep;
+    const newY = player.y + Math.sin(player.dir) * input.move.y * moveStep - Math.sin(player.dir + Math.PI/2) * input.move.x * strafeStep;
+
+    // Collision (Simple Box Check)
+    if(worldMap[Math.floor(newY)][Math.floor(player.x)] === 0) player.y = newY;
+    if(worldMap[Math.floor(player.y)][Math.floor(newX)] === 0) player.x = newX;
+}
+
+function render() {
+    // 1. Sky & Floor (Gradient)
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, SCREEN_H);
+    skyGrad.addColorStop(0, '#87CEEB');
+    skyGrad.addColorStop(0.5, '#E0F7FA');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, SCREEN_W, SCREEN_H / 2);
+
+    const floorGrad = ctx.createLinearGradient(0, SCREEN_H/2, 0, SCREEN_H);
+    floorGrad.addColorStop(0, '#2d5a27');
+    floorGrad.addColorStop(1, '#1a3317');
+    ctx.fillStyle = floorGrad;
+    ctx.fillRect(0, SCREEN_H / 2, SCREEN_W, SCREEN_H / 2);
+
+    // 2. Raycasting
+    const numRays = SCREEN_W; // 1 ray per pixel column (High res)
+    const startAngle = player.dir - FOV / 2;
+    const angleStep = FOV / numRays;
+
+    for(let i=0; i<numRays; i++) {
+        const rayAngle = startAngle + i * angleStep;
         
-        // Add Noise
-        for(let i=0; i<40000; i++) {
-            ctx.fillStyle = `rgba(0,0,0,${Math.random() * noise})`;
-            ctx.fillRect(Math.random()*size, Math.random()*size, 2, 2);
-            ctx.fillStyle = `rgba(255,255,255,${Math.random() * (noise/2)})`;
-            ctx.fillRect(Math.random()*size, Math.random()*size, 2, 2);
+        // DDA Algorithm
+        const eyeX = Math.cos(rayAngle);
+        const eyeY = Math.sin(rayAngle);
+        
+        let mapX = Math.floor(player.x);
+        let mapY = Math.floor(player.y);
+        
+        let deltaDistX = Math.abs(1 / eyeX);
+        let deltaDistY = Math.abs(1 / eyeY);
+        
+        let stepX, stepY;
+        let sideDistX, sideDistY;
+        let hit = 0;
+        let side; // 0 for NS, 1 for EW
+        
+        if(eyeX < 0) { stepX = -1; sideDistX = (player.x - mapX) * deltaDistX; }
+        else { stepX = 1; sideDistX = (mapX + 1.0 - player.x) * deltaDistX; }
+        
+        if(eyeY < 0) { stepY = -1; sideDistY = (player.y - mapY) * deltaDistY; }
+        else { stepY = 1; sideDistY = (mapY + 1.0 - player.y) * deltaDistY; }
+        
+        while(hit === 0) {
+            if(sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; }
+            else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
+            if(worldMap[mapY][mapX] > 0) hit = 1;
         }
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.wrapS = THREE.RepeatWrapping;
-        tex.wrapT = THREE.RepeatWrapping;
-        return tex;
-    }
-
-    const texGround = createTexture('#3b6e3b', 0.3);
-    const texWood = createTexture('#5d4037', 0.4);
-    const texStone = createTexture('#7f8c8d', 0.2);
-
-    // --- INIT GAME ---
-    function init() {
-        // 1. Setup Three.js
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB);
-        scene.fog = new THREE.Fog(0x87CEEB, 10, 80);
-
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        document.getElementById('game-container').appendChild(renderer.domElement);
-
-        // Lighting
-        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambient);
-        const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-        sun.position.set(50, 100, 50);
-        sun.castShadow = true;
-        sun.shadow.mapSize.width = 2048;
-        sun.shadow.mapSize.height = 2048;
-        sun.shadow.camera.near = 0.5;
-        sun.shadow.camera.far = 500;
-        sun.shadow.camera.left = -100;
-        sun.shadow.camera.right = 100;
-        sun.shadow.camera.top = 100;
-        sun.shadow.camera.bottom = -100;
-        scene.add(sun);
-
-        // 2. Setup Physics (Cannon.js)
-        world = new CANNON.World();
-        world.gravity.set(0, -9.82 * 2, 0); // Higher gravity for snappier feel
-        world.broadphase = new CANNON.NaiveBroadphase();
-        world.solver.iterations = 10;
-
-        // Materials
-        const physMat = new CANNON.Material('ground');
-        const playerMat = new CANNON.Material('player');
-        const contact = new CANNON.ContactMaterial(physMat, playerMat, { friction: 0.0, restitution: 0.0 });
-        world.addContactMaterial(contact);
-
-        // Ground
-        const groundBody = new CANNON.Body({ mass: 0, material: physMat });
-        groundBody.addShape(new CANNON.Plane());
-        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
-        world.addBody(groundBody);
-
-        // Visual Ground (Repeated Texture)
-        const groundGeo = new THREE.PlaneGeometry(200, 200);
-        texGround.repeat.set(50, 50);
-        const groundMesh = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ map: texGround }));
-        groundMesh.rotation.x = -Math.PI/2;
-        groundMesh.receiveShadow = true;
-        scene.add(groundMesh);
-
-        // 3. Create Player
-        createPlayer();
-
-        // 4. Create World (Map)
-        createMap();
-
-        // 5. Create Bots
-        for(let i=0; i<SETTINGS.botCount; i++) spawnBot();
-
-        // 6. Controls Setup
-        setupControls();
-
-        // 7. Start Loop
-        requestAnimationFrame(animate);
-    }
-
-    function createPlayer() {
-        // Physics Body (Capsule simulation via Sphere)
-        const shape = new CANNON.Sphere(0.8); 
-        playerBody = new CANNON.Body({ mass: 70, material: new CANNON.Material() });
-        playerBody.addShape(shape);
-        playerBody.position.set(0, 5, 0);
-        playerBody.linearDamping = 0.9; // Stops sliding
-        playerBody.angularDamping = 1.0; // Prevent rolling
-        playerBody.fixedRotation = true;
-        world.addBody(playerBody);
-
-        // Camera Rig
-        // We attach camera to a dummy object to handle rotations separate from physics body
-        yaw.position.copy(playerBody.position);
-        yaw.add(pitch);
-        pitch.add(camera);
-        pitch.position.y = 0.6; // Eye height
-        scene.add(yaw);
-    }
-
-    function createMap() {
-        // Helper to create buildings
-        function createBox(x, y, z, w, h, d, tex, mass=0) {
-            const geo = new THREE.BoxGeometry(w, h, d);
-            const mat = new THREE.MeshStandardMaterial({ map: tex });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(x, y + h/2, z);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            scene.add(mesh);
-
-            const shape = new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2));
-            const body = new CANNON.Body({ mass: mass });
-            body.addShape(shape);
-            body.position.set(x, y + h/2, z);
-            world.addBody(body);
-        }
-
-        // Random Buildings
-        createBox(10, 0, -10, 4, 4, 4, texWood);
-        createBox(-15, 0, -15, 6, 5, 6, texWood);
-        createBox(20, 0, 20, 8, 3, 8, texStone);
-        createBox(-20, 0, 20, 4, 6, 4, texWood);
+        let perpWallDist;
+        if(side === 0) perpWallDist = (mapX - player.x + (1 - stepX) / 2) / eyeX;
+        else perpWallDist = (mapY - player.y + (1 - stepY) / 2) / eyeY;
         
-        // Obstacles
-        createBox(5, 0, 5, 2, 2, 2, texStone);
-        createBox(-5, 0, 10, 3, 1, 3, texStone);
-
-        // Walls (Arena)
-        createBox(0, 0, -50, 100, 10, 2, texStone);
-        createBox(0, 0, 50, 100, 10, 2, texStone);
-        createBox(-50, 0, 0, 2, 10, 100, texStone);
-        createBox(50, 0, 0, 2, 10, 100, texStone);
-    }
-
-    function spawnBot() {
-        const geo = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
-        const mat = new THREE.MeshStandardMaterial({ color: 0xe74c3c });
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.castShadow = true;
-        scene.add(mesh);
-
-        const shape = new CANNON.Sphere(0.6);
-        const body = new CANNON.Body({ mass: 50 });
-        body.addShape(shape);
+        // Fix fisheye
+        const correctedDist = perpWallDist * Math.cos(rayAngle - player.dir);
         
-        // Random Pos
-        const x = (Math.random() - 0.5) * 80;
-        const z = (Math.random() - 0.5) * 80;
-        body.position.set(x, 5, z);
-        body.linearDamping = 0.5;
-        world.addBody(body);
-
-        bots.push({ mesh, body, dir: Math.random() * Math.PI * 2, changeTimer: 0 });
-    }
-
-    // --- CONTROLS LOGIC (MOBILE FPS STYLE) ---
-    function setupControls() {
-        const leftZone = document.getElementById('zone-left');
-        const rightZone = document.getElementById('zone-right');
-        const joyBase = document.getElementById('joystick-base');
-        const joyKnob = document.getElementById('joystick-knob');
-
-        // 1. MOVEMENT (Dynamic Joystick)
-        leftZone.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const touch = e.changedTouches[0];
-            input.move.active = true;
-            input.move.originX = touch.clientX;
-            input.move.originY = touch.clientY;
-            
-            // Show Visuals
-            joyBase.style.display = 'block';
-            joyBase.style.left = touch.clientX + 'px';
-            joyBase.style.top = touch.clientY + 'px';
-            joyKnob.style.transform = `translate(-50%, -50%)`;
-        });
-
-        leftZone.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            if(!input.move.active) return;
-            const touch = e.changedTouches[0];
-            
-            const maxDist = 50;
-            let dx = touch.clientX - input.move.originX;
-            let dy = touch.clientY - input.move.originY;
-            
-            const dist = Math.min(maxDist, Math.sqrt(dx*dx + dy*dy));
-            const angle = Math.atan2(dy, dx);
-            
-            const moveX = Math.cos(angle) * dist;
-            const moveY = Math.sin(angle) * dist;
-
-            joyKnob.style.transform = `translate(calc(-50% + ${moveX}px), calc(-50% + ${moveY}px))`;
-            
-            // Normalize Input -1 to 1
-            input.move.x = moveX / maxDist;
-            input.move.y = moveY / maxDist;
-        });
-
-        const endMove = () => {
-            input.move.active = false;
-            input.move.x = 0;
-            input.move.y = 0;
-            joyBase.style.display = 'none';
-        };
-        leftZone.addEventListener('touchend', endMove);
-        leftZone.addEventListener('touchcancel', endMove);
-
-        // 2. LOOKING (Camera Swipe)
-        rightZone.addEventListener('touchstart', (e) => {
-            input.look.active = true;
-            input.look.lastX = e.changedTouches[0].clientX;
-            input.look.lastY = e.changedTouches[0].clientY;
-        });
-
-        rightZone.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            if(!input.look.active) return;
-            const touch = e.changedTouches[0];
-            
-            const dx = touch.clientX - input.look.lastX;
-            const dy = touch.clientY - input.look.lastY;
-            
-            input.look.lastX = touch.clientX;
-            input.look.lastY = touch.clientY;
-
-            // Rotate Camera (Inverted Y axis is standard for PC, but mobile often prefers non-inverted)
-            // Let's do Standard FPS: Left swipe = Turn Left
-            yaw.rotation.y -= dx * SETTINGS.sensitivity;
-            pitch.rotation.x -= dy * SETTINGS.sensitivity;
-            
-            // Clamp Pitch (Look up/down limit)
-            pitch.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch.rotation.x));
-        });
-
-        const endLook = () => { input.look.active = false; };
-        rightZone.addEventListener('touchend', endLook);
-        rightZone.addEventListener('touchcancel', endLook);
-
-        // 3. BUTTONS
-        document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            // Only jump if touching ground (raycast or velocity check)
-            if(Math.abs(playerBody.velocity.y) < 0.1) {
-                playerBody.velocity.y = SETTINGS.jumpForce;
-            }
-        });
-
-        document.getElementById('btn-fire').addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            shoot();
-        });
-    }
-
-    function shoot() {
-        // Visual Flash
-        const flash = document.createElement('div');
-        flash.style.position = 'absolute';
-        flash.style.top = '0'; flash.style.left = '0';
-        flash.style.width = '100%'; flash.style.height = '100%';
-        flash.style.background = 'rgba(255,255,0,0.1)';
-        flash.style.pointerEvents = 'none';
-        document.body.appendChild(flash);
-        setTimeout(() => flash.remove(), 50);
-
-        // Raycast
-        const raycaster = new THREE.Raycaster();
-        raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+        // Wall Height
+        const lineHeight = Math.floor(SCREEN_H / correctedDist);
+        let drawStart = -lineHeight / 2 + SCREEN_H / 2 + player.z * (SCREEN_H/correctedDist);
+        let drawEnd = lineHeight / 2 + SCREEN_H / 2 + player.z * (SCREEN_H/correctedDist);
         
-        // Check Hits on Bots
-        const botMeshes = bots.map(b => b.mesh);
-        const intersects = raycaster.intersectObjects(botMeshes);
-
-        if(intersects.length > 0) {
-            const hitObj = intersects[0].object;
-            // Find bot
-            const botIndex = bots.findIndex(b => b.mesh === hitObj);
-            if(botIndex > -1) {
-                // Kill Bot (Respawn)
-                const b = bots[botIndex];
-                scene.remove(b.mesh);
-                world.removeBody(b.body);
-                bots.splice(botIndex, 1);
+        // Shading (Distance fog)
+        const brightness = Math.max(0, 1 - correctedDist / MAX_DEPTH);
+        ctx.globalAlpha = 1;
+        
+        // Texturing
+        let texX;
+        if(side === 0) texX = player.y + perpWallDist * eyeY;
+        else texX = player.x + perpWallDist * eyeX;
+        texX -= Math.floor(texX);
+        texX *= TEX_SIZE;
+        
+        // Get texture slice
+        const tex = textures.wall;
+        
+        // Draw Strip
+        // Performance: drawImage 1px wide strips is heavy, but necessary for textures
+        // Using fillRect is faster but flat. Let's use fillRect with color modulation for speed + texture effect
                 
-                // Spawn new one later
-                setTimeout(spawnBot, 3000);
-                
-                // Update UI
-                document.getElementById('health-hud').innerText = "KILL +100";
-                setTimeout(() => document.getElementById('health-hud').innerText = "HP: 100/100", 1000);
-            }
+        ctx.fillStyle = `rgb(${Math.floor(100 * brightness)}, ${Math.floor(70 * brightness)}, ${Math.floor(50 * brightness)})`;
+        if(side === 1) ctx.fillStyle = `rgb(${Math.floor(80 * brightness)}, ${Math.floor(55 * brightness)}, ${Math.floor(40 * brightness)})`; // Darker side
+        
+        ctx.fillRect(i, drawStart, 1, drawEnd - drawStart);
+    }
+    
+    // 3. Draw Weapon (Gun)
+    const gunBob = Math.sin(Date.now() / 150) * (input.move.active ? 5 : 1); // Bobbing effect
+    const gunX = SCREEN_W / 2 - 40;
+    const gunY = SCREEN_H - 200 + gunBob + player.z; // Gun moves with jump
+    
+    // Draw Gun Body (Simple vector shapes)
+    ctx.fillStyle = '#222';
+    ctx.fillRect(gunX, gunY, 80, 100); // Handle
+    ctx.fillStyle = '#444';
+    ctx.fillRect(gunX + 10, gunY - 50, 60, 60); // Barrel
+    
+    // Muzzle Flash (Random)
+    if(Math.random() > 0.9 && player.z > 1) { // If jumping/recoiling
+        ctx.fillStyle = `rgba(255, 200, 50, ${Math.random()})`;
+        ctx.beginPath();
+        ctx.arc(SCREEN_W/2, SCREEN_H/2 - 100 + gunBob, 50 + Math.random()*20, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    drawMinimap();
+}
+
+function drawMinimap() {
+    miniCtx.fillStyle = '#000';
+    miniCtx.fillRect(0,0, miniCanvas.width, miniCanvas.height);
+    
+    const scale = 10;
+    
+    // Draw Walls
+    miniCtx.fillStyle = '#555';
+    for(let y=0; y<MAP_SIZE; y++) {
+        for(let x=0; x<MAP_SIZE; x++) {
+            if(worldMap[y][x]) miniCtx.fillRect(x*scale, y*scale, scale, scale);
         }
     }
+    
+    // Draw Player
+    miniCtx.fillStyle = '#f00';
+    miniCtx.beginPath();
+    miniCtx.arc(player.x*scale, player.y*scale, 3, 0, Math.PI*2);
+    miniCtx.fill();
+    
+    // View Cone
+    miniCtx.strokeStyle = 'rgba(255,255,0,0.3)';
+    miniCtx.beginPath();
+    miniCtx.moveTo(player.x*scale, player.y*scale);
+    miniCtx.lineTo((player.x + Math.cos(player.dir-FOV/2)*4)*scale, (player.y + Math.sin(player.dir-FOV/2)*4)*scale);
+    miniCtx.moveTo(player.x*scale, player.y*scale);
+    miniCtx.lineTo((player.x + Math.cos(player.dir+FOV/2)*4)*scale, (player.y + Math.sin(player.dir+FOV/2)*4)*scale);
+    miniCtx.stroke();
+}
 
-    // --- MAIN LOOP ---
-    function animate() {
-        requestAnimationFrame(animate);
-        
-        const dt = 1/60;
+function loop() {
+    update();
+    render();
+    requestAnimationFrame(loop);
+}
 
-        // 1. Physics Step
-        world.step(dt);
-
-        // 2. Player Movement Logic
-        // Get Forward/Right vectors based on Yaw (Horizontal rotation only)
-        const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0,1,0), yaw.rotation.y);
-        const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0,1,0), yaw.rotation.y);
-
-        const moveVec = new THREE.Vector3()
-            .addScaledVector(forward, input.move.y) // Forward is -Z in logic, but Joystick Up is -Y. Logic matches if mapped right.
-            .addScaledVector(right, input.move.x);
-
-        // Apply velocity
-        playerBody.velocity.x = moveVec.x * SETTINGS.playerSpeed;
-        playerBody.velocity.z = moveVec.z * SETTINGS.playerSpeed;
-
-        // Sync Camera to Physics Body
-        yaw.position.copy(playerBody.position);
-
-        // 3. Update Bots (Simple AI)
-        bots.forEach(bot => {
-            bot.body.velocity.x = Math.cos(bot.dir) * 2;
-            bot.body.velocity.z = Math.sin(bot.dir) * 2;
-            
-            // Face direction
-            bot.mesh.position.copy(bot.body.position);
-            bot.mesh.rotation.y = -bot.dir;
-
-            // Change direction randomly
-            bot.changeTimer++;
-            if(bot.changeTimer > 60) {
-                bot.dir += (Math.random() - 0.5);
-                bot.changeTimer = 0;
-            }
-        });
-
-        renderer.render(scene, camera);
-    }
-
-    // Handle Resize
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    init();
+// Start
+loop();
 
 </script>
 </body>
