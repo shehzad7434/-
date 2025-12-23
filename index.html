@@ -3,13 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>WARZONE: FINAL</title>
+    <title>WARZONE: FINAL FIXED</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; touch-action: none; user-select: none; font-family: 'Segoe UI', sans-serif; }
         
         /* UI LAYERS */
         #game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: none; }
         
+        /* HIT EFFECTS */
+        #damage-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: red; opacity: 0; pointer-events: none; z-index: 5;
+            transition: opacity 0.1s;
+        }
+        #hit-marker {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 40px; height: 40px; pointer-events: none; display: none; z-index: 20;
+        }
+        #hit-marker::before, #hit-marker::after {
+            content: ''; position: absolute; top: 18px; left: 0; width: 40px; height: 4px;
+            background: #ff0000; border-radius: 2px;
+        }
+        #hit-marker::before { transform: rotate(45deg); }
+        #hit-marker::after { transform: rotate(-45deg); }
+
         /* DEATH SCREEN */
         #death-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -122,6 +139,9 @@
 
     <div id="loader">CONNECTING TO BATTLEFIELD...</div>
 
+    <div id="damage-overlay"></div>
+    <div id="hit-marker"></div>
+
     <div id="game-ui">
         <div id="admin-btn-container"><button id="admin-btn" onclick="toggleAdmin()">ADMIN</button></div>
         <div class="hud-stats">
@@ -176,11 +196,14 @@
     } catch(e) { console.error(e); }
 
     const myId = "P_" + Math.floor(Math.random()*100000);
-    const joinTime = Date.now(); // Chat Filter
+    // REMOVES CLONES ON EXIT
+    if(playersRef) playersRef.child(myId).onDisconnect().remove();
+
+    const joinTime = Date.now();
     let scene, camera, renderer, world, playerBody;
     let pitchObj = new THREE.Object3D(), yawObj = new THREE.Object3D();
     let otherPlayers = {};
-    let shootableMeshes = []; // For Raycast
+    let shootableMeshes = [];
     
     // Audio Context
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -243,22 +266,18 @@
         const matHead = new THREE.MeshLambertMaterial({color:0xffff00});
         const matLimb = new THREE.MeshLambertMaterial({color:0x00aa00});
 
-        // Torso
         const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1.5, 0.5), matBody);
         body.position.y = 0.75;
         group.add(body);
 
-        // Head
         const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), matHead);
         head.position.y = 1.9;
         group.add(head);
 
-        // Legs (For animation)
         const legGeo = new THREE.BoxGeometry(0.4, 1.5, 0.4);
         const legL = new THREE.Mesh(legGeo, matLimb); legL.position.set(-0.3, 0, 0); legL.name="LegL";
         const legR = new THREE.Mesh(legGeo, matLimb); legR.position.set(0.3, 0, 0); legR.name="LegR";
         
-        // Pivot point fix
         const legGroup = new THREE.Group();
         legGroup.add(legL); legGroup.add(legR);
         group.add(legGroup);
@@ -275,16 +294,17 @@
         camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
         
         world = new CANNON.World();
-        world.gravity.set(0, -20, 0);
+        world.gravity.set(0, -30, 0); // INCREASED GRAVITY
         const pMat = new CANNON.Material();
+        // FRICTION ZERO FIXES SLOW MOVEMENT
         world.addContactMaterial(new CANNON.ContactMaterial(pMat, pMat, { friction: 0.0, restitution: 0.0 }));
 
         // Player
         const shape = new CANNON.Sphere(1);
         playerBody = new CANNON.Body({ mass: 60, material: pMat, fixedRotation: true });
         playerBody.addShape(shape);
-        playerBody.position.set(0, 50, 0); // Sky Drop spawn
-        playerBody.linearDamping = 0.9;
+        playerBody.position.set(0, 50, 0);
+        playerBody.linearDamping = 0.01; // FIXED: WAS 0.9 (Too floaty)
         world.addBody(playerBody);
 
         pitchObj.add(camera);
@@ -292,7 +312,6 @@
         yawObj.position.y = 1.6;
         scene.add(yawObj);
 
-        // Lights
         const amb = new THREE.AmbientLight(0xffffff, 0.7);
         scene.add(amb);
         const dir = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -308,13 +327,12 @@
         document.getElementById('loader').style.display = 'none';
         document.getElementById('game-ui').style.display = 'block';
         
-        setupTouchControls(); // FIXED: Changed from setupControls()
+        setupTouchControls();
         setupNet();
-        update(); // FIXED: Changed from animate()
+        update();
     }
 
     function buildMap() {
-        // Floor
         const fTex = genTex('#2e7d32', 'grid'); fTex.repeat.set(100,100); fTex.wrapS=THREE.RepeatWrapping; fTex.wrapT=THREE.RepeatWrapping;
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(400,400), new THREE.MeshLambertMaterial({map:fTex}));
         floor.rotation.x = -Math.PI/2;
@@ -324,11 +342,9 @@
         fBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
         world.addBody(fBody);
 
-        // Buildings (Randomized)
         const wallMat = new THREE.MeshLambertMaterial({map:genTex('#5d4037', 'noise')});
         const crateMat = new THREE.MeshBasicMaterial({map:genTex('#ffcc00', 'box')});
         
-        // Spawn 50 structures
         for(let i=0; i<50; i++) {
             const w = 4 + Math.random()*8;
             const h = 4 + Math.random()*10;
@@ -344,16 +360,10 @@
             body.addShape(new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2)));
             world.addBody(body);
 
-            // Ammo on Roof (Parkour)
-            if(Math.random() > 0.4) {
-                spawnAmmo(x, h + 0.5, z, crateMat);
-            }
+            if(Math.random() > 0.4) spawnAmmo(x, h + 0.5, z, crateMat);
         }
         
-        // Ground Ammo
-        for(let i=0; i<20; i++) {
-             spawnAmmo((Math.random()-0.5)*300, 0.5, (Math.random()-0.5)*300, crateMat);
-        }
+        for(let i=0; i<20; i++) spawnAmmo((Math.random()-0.5)*300, 0.5, (Math.random()-0.5)*300, crateMat);
     }
     
     let pickups = [];
@@ -361,17 +371,14 @@
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), mat);
         mesh.position.set(x, y, z);
         scene.add(mesh);
-        // Static body for collision/standing
         const body = new CANNON.Body({mass:0, position:new CANNON.Vec3(x, y, z)});
         body.addShape(new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5)));
         world.addBody(body);
-        
         pickups.push({mesh:mesh, body:body, active:true});
     }
 
     // --- NETWORKING ---
     function setupNet() {
-        // Send Position & HP
         setInterval(() => {
             if(!isDead) {
                 playersRef.child(myId).update({
@@ -384,19 +391,15 @@
             }
         }, 50);
 
-        // Receive Players
         playersRef.on("value", snap => {
             const d = snap.val() || {};
-            // Cleanup
             for(let id in otherPlayers) if(!d[id]) { scene.remove(otherPlayers[id].root); delete otherPlayers[id]; }
-            // Update
             for(let id in d) {
                 if(id === myId) continue;
                 if(!otherPlayers[id]) {
                     const pObj = createPlayerMesh();
                     scene.add(pObj.mesh);
-                    // Add to shootable array
-                    pObj.mesh.userData = { id: id }; // Tag mesh with ID
+                    pObj.mesh.userData = { id: id };
                     shootableMeshes.push(pObj.mesh);
                     otherPlayers[id] = { root: pObj.mesh, legL: pObj.legL, legR: pObj.legR };
                 }
@@ -405,7 +408,6 @@
                 p.root.position.lerp(new THREE.Vector3(data.x, data.y, data.z), 0.3);
                 p.root.rotation.y = data.rot;
                 
-                // Walking Animation
                 if(data.moving) {
                     const t = Date.now() * 0.01;
                     p.legL.rotation.x = Math.sin(t) * 0.5;
@@ -417,21 +419,26 @@
             }
         });
 
-        // Damage Listener (Taking hits)
+        // Damage Listener with Visuals
         playersRef.child(myId).child("hits").on("child_added", (snap) => {
             if(isGodMode || isDead) return;
             const dmg = snap.val();
             hp -= dmg;
             document.getElementById('hp-val').innerText = hp;
-            snap.ref.remove(); // Clear hit
+            
+            // RED SCREEN FLASH
+            const overlay = document.getElementById('damage-overlay');
+            overlay.style.opacity = 0.8;
+            setTimeout(() => overlay.style.opacity = 0, 200);
+
+            snap.ref.remove();
             
             if(hp <= 0) die();
         });
 
-        // Chat
         chatRef.limitToLast(10).on("child_added", s => {
             const v = s.val();
-            if(v.time < joinTime) return; // Filter old msgs
+            if(v.time < joinTime) return;
             if(!isChatOpen) createToast(`${v.id.substr(0,4)}: ${v.msg}`);
             const d = document.createElement('div');
             d.innerHTML = `<b style="color:${v.id===myId?'lime':'orange'}">${v.id.substr(0,4)}:</b> ${v.msg}`;
@@ -455,28 +462,27 @@
             playPew();
             if(!isGodMode) { ammo--; document.getElementById('ammo-val').innerText = ammo; }
             
-            pitchObj.rotation.x += 0.04; // Recoil
+            pitchObj.rotation.x += 0.04;
 
-            // Raycast
             const ray = new THREE.Raycaster();
             ray.setFromCamera(new THREE.Vector2(0,0), camera);
             
-            // Raycast against all player meshes (traversing children)
-            // Flatten shootable list
             let targets = [];
             Object.values(otherPlayers).forEach(p => targets.push(p.root));
             
             const intersects = ray.intersectObjects(targets, true);
             
             if(intersects.length > 0) {
-                // Find root object to get ID
                 let hitObj = intersects[0].object;
                 while(hitObj.parent && !hitObj.userData.id) hitObj = hitObj.parent;
                 
                 if(hitObj.userData.id) {
-                    // Send Hit to Firebase
                     playersRef.child(hitObj.userData.id).child("hits").push(15);
-                    // Hit Marker visual? (Maybe later)
+                    
+                    // HIT MARKER ANIMATION
+                    const hm = document.getElementById('hit-marker');
+                    hm.style.display = 'block';
+                    setTimeout(() => hm.style.display = 'none', 100);
                 }
             }
         }
@@ -486,7 +492,6 @@
         isDead = true;
         document.getElementById('game-ui').style.display = 'none';
         document.getElementById('death-screen').style.display = 'flex';
-        // Hide from map
         playersRef.child(myId).remove();
     }
 
@@ -495,7 +500,6 @@
         hp = 100; ammo = 30;
         document.getElementById('hp-val').innerText = hp;
         document.getElementById('ammo-val').innerText = ammo;
-        // Random Sky Drop
         playerBody.position.set((Math.random()-0.5)*200, 50, (Math.random()-0.5)*200);
         playerBody.velocity.set(0,0,0);
         document.getElementById('death-screen').style.display = 'none';
@@ -539,7 +543,10 @@
         document.addEventListener('touchstart', e => {
             for(let i=0; i<e.changedTouches.length; i++) {
                 const t = e.changedTouches[i];
-                if(t.clientX > window.innerWidth/2 && !t.target.classList.contains('action-btn')) {
+                // Prevent locking onto joystick
+                if(t.identifier === touchData.moveId) continue;
+
+                if(!t.target.classList.contains('action-btn')) {
                     touchData.lookId = t.identifier; touchData.lookX = t.clientX; touchData.lookY = t.clientY;
                 }
             }
@@ -547,6 +554,9 @@
 
         document.addEventListener('touchmove', e => {
             for(let i=0; i<e.changedTouches.length; i++) {
+                // Ignore joystick move
+                if(e.changedTouches[i].identifier === touchData.moveId) continue;
+
                 if(e.changedTouches[i].identifier === touchData.lookId) {
                     const t = e.changedTouches[i];
                     yawObj.rotation.y -= (t.clientX - touchData.lookX)*0.005;
@@ -557,7 +567,6 @@
             }
         }, {passive:false});
 
-        // Buttons
         document.getElementById('btn-jump').addEventListener('touchstart', e=>{ e.preventDefault(); if(playerBody.position.y < 3 || isGodMode) playerBody.velocity.y = isGodMode? 10 : 8; });
         document.getElementById('btn-fire').addEventListener('touchstart', e=>{ e.preventDefault(); fireBullet(); });
         document.getElementById('btn-scope').addEventListener('touchstart', e=>{ e.preventDefault(); isScoped=!isScoped; camera.fov=isScoped?30:75; camera.updateProjectionMatrix(); });
@@ -575,13 +584,13 @@
                 const dir = new THREE.Vector3();
                 if(move.f) dir.z = -1; if(move.b) dir.z = 1;
                 if(move.l) dir.x = -1; if(move.r) dir.x = 1;
-                // Fix: Fly where camera looks
                 dir.applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
                 playerBody.position.add(dir.multiplyScalar(speed * dt));
             } else {
                 world.step(dt);
                 playerBody.mass = 60;
-                const speed = 10;
+                // INCREASED SPEED
+                const speed = 15; 
                 const dir = new THREE.Vector3();
                 if(move.f) dir.z = -1; if(move.b) dir.z = 1;
                 if(move.l) dir.x = -1; if(move.r) dir.x = 1;
@@ -593,7 +602,6 @@
             yawObj.position.copy(playerBody.position);
             yawObj.position.y += isGodMode ? 0 : 0.6;
             
-            // Pickup Ammo
             pickups.forEach(p => {
                 if(p.active && playerBody.position.distanceTo(p.mesh.position) < 2) {
                     p.active = false; scene.remove(p.mesh); world.removeBody(p.body);
@@ -612,7 +620,7 @@
             document.getElementById('admin-btn').classList.remove('active');
             document.getElementById('hp-val').innerText = hp;
             document.getElementById('hp-val').style.color = "#ff3333";
-            ammo = Math.min(ammo, MAX_AMMO); // Reset ammo limit
+            ammo = Math.min(ammo, MAX_AMMO);
             document.getElementById('ammo-val').innerText = ammo;
         } else document.getElementById('admin-modal').style.display = 'flex';
     }
@@ -629,7 +637,6 @@
         } else alert("ACCESS DENIED");
     }
 
-    // Chat UI
     window.toggleChatUi = function() {
         const w = document.getElementById('chat-wrap');
         isChatOpen = !isChatOpen;
