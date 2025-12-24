@@ -252,8 +252,8 @@
             resultText.style.color = "#ccc";
 
             try {
-                // 3. Backend Call (Apna PythonAnywhere URL)
-                const response = await fetch('https://shehzadplayz74.pythonanywhere.com/api/verify', {
+                // 3. Backend Call (VERCEL URL ADDED HERE)
+                const response = await fetch('https://plato-vercel-backend.vercel.app/api/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url: link })
@@ -272,9 +272,6 @@
 
                     btn.innerHTML = '<i class="fas fa-check"></i> Done';
                     
-                    // Yahan tu redirect logic laga sakta hai agar chahiye
-                    // window.location.href = "YOUR_LINK";
-                    
                 } else {
                     // Backend Error
                     statusHeader.innerText = "❌ FAILED";
@@ -290,7 +287,7 @@
                 statusHeader.innerText = "❌ SERVER ERROR";
                 statusHeader.style.color = "#ff3333";
                 resultText.style.color = "#ff3333";
-                resultText.innerText = "Could not connect to server. Check your internet connection.";
+                resultText.innerText = "Could not connect to Vercel Server.\n" + error.message;
                 btn.innerHTML = '<i class="fas fa-redo"></i> Try Again';
                 btn.disabled = false;
             }
@@ -298,3 +295,4 @@
     </script>
 </body>
 </html>
+
