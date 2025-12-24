@@ -2,730 +2,179 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>WARZONE: TERRAIN UPDATE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plato Session Manager</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; touch-action: none; user-select: none; font-family: 'Segoe UI', sans-serif; }
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: #161b22;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #30363d;
+        }
+        h2 { text-align: center; color: #58a6ff; }
         
-        /* UI LAYERS */
-        #game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: none; }
+        .step {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            background: #21262d;
+        }
+        .step h3 { margin-top: 0; font-size: 16px; color: #79c0ff; }
         
-        /* RED DAMAGE FLASH */
-        #damage-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: red; opacity: 0; pointer-events: none; z-index: 20; transition: opacity 0.1s;
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #238636;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-weight: bold;
         }
-
-        /* DEATH SCREEN */
-        #death-screen {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(50, 0, 0, 0.9); z-index: 100; display: none;
-            flex-direction: column; justify-content: center; align-items: center;
+        button:hover { background-color: #2ea043; }
+        
+        #console-log {
+            background: #000;
+            color: #0f0;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 5px;
+            min-height: 150px;
+            white-space: pre-wrap;
+            font-size: 12px;
+            border: 1px solid #333;
         }
-        #death-msg { font-size: 3rem; color: red; font-weight: 900; text-shadow: 2px 2px black; margin-bottom: 20px; }
-        #respawn-btn {
-            padding: 15px 40px; background: #fff; color: #000; font-size: 1.5rem; border: none;
-            font-weight: bold; cursor: pointer; border-radius: 8px; pointer-events: auto;
-        }
-
-        /* ADMIN BUTTON */
-        #admin-btn-container {
-            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-            pointer-events: auto; z-index: 20;
-        }
-        #admin-btn {
-            background: rgba(0,0,0,0.6); border: 2px solid #00ff00; color: #00ff00;
-            padding: 8px 16px; font-weight: bold; border-radius: 4px; cursor: pointer;
-            font-size: 14px; text-shadow: 0 0 5px #00ff00;
-        }
-        #admin-btn.active { background: #00ff00; color: #000; box-shadow: 0 0 15px #00ff00; }
-
-        /* TOASTS */
-        #chat-toasts {
-            position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
-            width: 80%; display: flex; flex-direction: column; align-items: center; gap: 5px;
-            pointer-events: none; z-index: 30;
-        }
-        .toast-msg {
-            background: rgba(0, 0, 0, 0.7); color: #fff; padding: 5px 10px;
-            border-radius: 20px; font-size: 12px; border: 1px solid rgba(255,255,255,0.3);
-            animation: fadeOut 4s forwards;
-        }
-        @keyframes fadeOut { 0% { opacity: 0; transform: translateY(-10px); } 10% { opacity: 1; transform: translateY(0); } 90% { opacity: 1; } 100% { opacity: 0; display: none; } }
-
-        /* CHAT */
-        #chat-toggle {
-            position: absolute; top: 10px; left: 10px; pointer-events: auto;
-            width: 40px; height: 40px; background: rgba(0,0,0,0.5); border: 1px solid #fff;
-            border-radius: 50%; display: flex; justify-content: center; align-items: center;
-            color: #fff; font-size: 20px; z-index: 25; cursor: pointer;
-        }
-        #chat-wrap {
-            position: absolute; top: 60px; left: 10px; width: 250px; height: 150px;
-            pointer-events: auto; display: none; flex-direction: column; z-index: 25;
-            background: rgba(0,0,0,0.8); border: 1px solid #555; border-radius: 8px;
-        }
-        #chat-msgs { flex: 1; overflow-y: auto; color: #fff; font-size: 12px; padding: 5px; scrollbar-width: none; }
-        #chat-input-row { display: flex; padding: 5px; border-top: 1px solid #444; }
-        #chat-input { flex: 1; background: rgba(255,255,255,0.1); border: none; color: white; padding: 4px; border-radius: 4px; outline: none; }
-        #chat-send { background: #00ff00; border: none; padding: 0 10px; font-weight: bold; border-radius: 4px; margin-left: 5px; cursor: pointer; }
-
-        /* HUD */
-        #crosshair { position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); pointer-events: none; }
-        .ch-line { position: absolute; background: #fff; box-shadow: 0 0 2px #000; }
-        .ch-h { width: 20px; height: 2px; top: 9px; left: 0; }
-        .ch-v { width: 2px; height: 20px; top: 0; left: 9px; }
-
-        .hud-stats { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; }
-        .stat-box { font-size: 1.2rem; font-weight: bold; text-shadow: 1px 1px 2px #000; white-space: nowrap; }
-        .hp { color: #ff3333; } .ammo { color: #ffcc00; }
-
-        /* CONTROLS */
-        #joystick-zone {
-            position: absolute; bottom: 30px; left: 30px; width: 120px; height: 120px;
-            background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2);
-            border-radius: 50%; pointer-events: auto; touch-action: none;
-        }
-        #stick-knob {
-            position: absolute; top: 50%; left: 50%; width: 50px; height: 50px;
-            background: rgba(255,255,255,0.5); border-radius: 50%;
-            transform: translate(-50%, -50%); pointer-events: none;
-        }
-        .action-btn {
-            position: absolute; border-radius: 50%; pointer-events: auto;
-            display: flex; justify-content: center; align-items: center;
-            font-weight: bold; color: white; backdrop-filter: blur(4px); touch-action: none;
-        }
-        #btn-fire { bottom: 50px; right: 30px; width: 80px; height: 80px; background: rgba(255, 50, 50, 0.4); border: 3px solid red; }
-        #btn-fire:active { background: rgba(255, 50, 50, 0.8); }
-        #btn-jump { bottom: 150px; right: 40px; width: 60px; height: 60px; background: rgba(255,255,255,0.2); border: 2px solid #fff; }
-        #btn-scope { bottom: 60px; right: 130px; width: 50px; height: 50px; background: rgba(255,255,255,0.2); border: 2px solid #fff; font-size: 10px; }
-
-        /* LOADING */
-        #loader {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #111; display: flex; justify-content: center; align-items: center;
-            color: #00ff00; font-family: monospace; font-size: 20px; z-index: 100;
-        }
-
-        /* ADMIN MODAL */
-        #admin-modal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center; z-index: 1000;
-        }
-        .modal-box { background: #111; padding: 20px; border: 1px solid #00ff00; text-align: center; border-radius: 8px; }
-        .modal-inp { padding: 10px; background: #000; border: 1px solid #333; color: #00ff00; text-align: center; font-size: 18px; width: 150px; }
-        .modal-btn { padding: 10px 20px; background: #00ff00; color: #000; border: none; font-weight: bold; margin-top: 10px; cursor: pointer; }
     </style>
-    
-    <!-- LIBRARIES -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body>
 
-    <div id="loader">GENERATING TERRAIN...</div>
-    <div id="damage-overlay"></div>
+    <div class="container">
+        <h2>Plato Auto-Cookie Sequence</h2>
+        
+        <!-- STEP 1: INITIALIZE -->
+        <div class="step">
+            <h3>Step 1: Initialize Session (Cookie Maker)</h3>
+            <p style="font-size: 12px; color: #8b949e;">Ye request '/a?d=...' url ko hit karegi taaki browser cookies save kar le.</p>
+            <button onclick="step1_Initialize()">1. Run Initialization</button>
+        </div>
 
-    <div id="game-ui">
-        <div id="admin-btn-container"><button id="admin-btn" onclick="toggleAdmin()">ADMIN</button></div>
-        <div class="hud-stats">
-            <div class="stat-box hp">HP: <span id="hp-val">100</span></div>
-            <div class="stat-box ammo">AMMO: <span id="ammo-val">30</span></div>
+        <!-- STEP 2: VALIDATE -->
+        <div class="step">
+            <h3>Step 2: Validate Session (PUT Data)</h3>
+            <p style="font-size: 12px; color: #8b949e;">Ye wo 'Step' API hai jo JSON data bhej kar session confirm karti hai.</p>
+            <button onclick="step2_Validate()">2. Send Validation Data</button>
         </div>
-        <div id="crosshair"><div class="ch-line ch-h"></div><div class="ch-line ch-v"></div></div>
-        <div id="chat-toasts"></div>
-        <div id="chat-toggle" onclick="toggleChatUi()">💬</div>
-        <div id="chat-wrap">
-            <div id="chat-msgs"></div>
-            <div id="chat-input-row"><input type="text" id="chat-input" placeholder="Say something..."><button id="chat-send">></button></div>
+
+        <!-- STEP 3: STATUS -->
+        <div class="step">
+            <h3>Step 3: Check Status</h3>
+            <p style="font-size: 12px; color: #8b949e;">Finally, ye check karega ke session active hai ya nahi.</p>
+            <button onclick="step3_CheckStatus()">3. Get Status</button>
         </div>
-        <div id="joystick-zone"><div id="stick-knob"></div></div>
-        <div id="btn-fire" class="action-btn"></div>
-        <div id="btn-jump" class="action-btn">JUMP</div>
-        <div id="btn-scope" class="action-btn">AIM</div>
+
+        <div id="console-log">Logs will appear here...</div>
     </div>
 
-    <div id="death-screen">
-        <div id="death-msg">YOU DIED</div>
-        <button id="respawn-btn" onclick="respawn()">PLAY AGAIN</button>
-    </div>
-
-    <div id="admin-modal">
-        <div class="modal-box">
-            <h3 style="color:#00ff00; margin-top:0;">GOD MODE</h3>
-            <input type="password" id="admin-code" class="modal-inp" maxlength="4">
-            <br>
-            <button class="modal-btn" onclick="verifyAdmin()">ACCESS</button>
-            <button class="modal-btn" style="background:#333; color:#fff" onclick="closeModal()">CANCEL</button>
-        </div>
-    </div>
-
-<script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyBJ6YSWR1CkjCc58fRopdWtiuI_NGedUEo",
-      authDomain: "gemini-multiplayer-948fe.firebaseapp.com",
-      databaseURL: "https://gemini-multiplayer-948fe-default-rtdb.firebaseio.com",
-      projectId: "gemini-multiplayer-948fe",
-      storageBucket: "gemini-multiplayer-948fe.firebasestorage.app",
-      messagingSenderId: "312734987383",
-      appId: "1:312734987383:web:2aa0ea9caa5f0c8cfd8272"
-    };
-
-    let db, playersRef, chatRef;
-    try {
-        firebase.initializeApp(firebaseConfig);
-        db = firebase.database();
-        playersRef = db.ref("players");
-        chatRef = db.ref("chat");
-    } catch(e) { console.error(e); }
-
-    const myId = "P_" + Math.floor(Math.random()*100000);
-    const joinTime = Date.now();
-    let scene, camera, renderer, world, playerBody;
-    let pitchObj = new THREE.Object3D(), yawObj = new THREE.Object3D();
-    let otherPlayers = {};
-    let shootableMeshes = [];
-    let particles = []; // For Blood/Effects
-    
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
-    let hp = 100;
-    let ammo = 30;
-    const MAX_AMMO = 30;
-    let isScoped = false, isGodMode = false, isDead = false;
-    let lastShot = 0;
-    let isChatOpen = false;
-    let isGrounded = false; // To fix speed
-    
-    let move = { f:0, b:0, l:0, r:0 };
-    let touchData = { moveId:null, lookId:null, startX:0, startY:0, lookX:0, lookY:0 };
-
-    function playPew() {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.type = 'sawtooth'; // Deeper sound
-        osc.frequency.setValueAtTime(120, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.1);
-    }
-
-    function genTex(color, type='solid') {
-        const c = document.createElement('canvas'); c.width=64; c.height=64;
-        const x = c.getContext('2d');
-        x.fillStyle = color; x.fillRect(0,0,64,64);
-        if(type==='grid') {
-            x.strokeStyle = 'rgba(0,0,0,0.2)'; x.lineWidth=2;
-            x.strokeRect(0,0,64,64);
-        } else if (type==='noise') {
-            x.fillStyle = "rgba(0,0,0,0.1)";
-            for(let i=0;i<100;i++) x.fillRect(Math.random()*64,Math.random()*64,2,2);
-        } else if (type==='box') {
-             x.fillStyle = "#8d6e63"; x.fillRect(0,0,64,64);
-             x.fillStyle = "#5d4037"; x.fillRect(5,5,54,54);
-             x.fillStyle = "#a1887f"; x.fillRect(10,10,44,44);
-             x.fillStyle = "yellow"; x.font="20px Arial"; x.fillText("AM", 10, 40);
-        }
-        const t = new THREE.CanvasTexture(c);
-        t.magFilter = THREE.NearestFilter;
-        return t;
-    }
-
-    // --- PARTICLE SYSTEM ---
-    function spawnParticles(pos, color, count=10) {
-        for(let i=0; i<count; i++) {
-            const mesh = new THREE.Mesh(
-                new THREE.BoxGeometry(0.2, 0.2, 0.2),
-                new THREE.MeshBasicMaterial({color: color})
-            );
-            mesh.position.copy(pos);
-            // Random velocity
-            const vel = new THREE.Vector3(
-                (Math.random()-0.5)*0.5,
-                (Math.random())*0.5,
-                (Math.random()-0.5)*0.5
-            );
-            scene.add(mesh);
-            particles.push({ mesh: mesh, vel: vel, life: 1.0 });
-        }
-    }
-
-    function createPlayerMesh() {
-        const group = new THREE.Group();
-        const matBody = new THREE.MeshLambertMaterial({color:0x0000ff});
-        const matHead = new THREE.MeshLambertMaterial({color:0xffff00});
-        const matLimb = new THREE.MeshLambertMaterial({color:0x00aa00});
-
-        const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1.5, 0.5), matBody);
-        body.position.y = 0.75;
-        group.add(body);
-
-        const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), matHead);
-        head.position.y = 1.9;
-        group.add(head);
-
-        const legGeo = new THREE.BoxGeometry(0.4, 1.5, 0.4);
-        const legL = new THREE.Mesh(legGeo, matLimb); legL.position.set(-0.3, 0, 0); legL.name="LegL";
-        const legR = new THREE.Mesh(legGeo, matLimb); legR.position.set(0.3, 0, 0); legR.name="LegR";
+    <script>
+        const logBox = document.getElementById('console-log');
         
-        const legGroup = new THREE.Group();
-        legGroup.add(legL); legGroup.add(legR);
-        group.add(legGroup);
-
-        return { mesh: group, legL: legL, legR: legR };
-    }
-
-    function init() {
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB);
-        scene.fog = new THREE.Fog(0x87CEEB, 10, 150);
-
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        
-        world = new CANNON.World();
-        world.gravity.set(0, -20, 0);
-        const pMat = new CANNON.Material();
-        world.addContactMaterial(new CANNON.ContactMaterial(pMat, pMat, { friction: 0.0, restitution: 0.0 }));
-
-        // Player
-        const shape = new CANNON.Sphere(1);
-        playerBody = new CANNON.Body({ mass: 60, material: pMat, fixedRotation: true });
-        playerBody.addShape(shape);
-        playerBody.position.set(0, 20, 0); 
-        playerBody.linearDamping = 0.9;
-        world.addBody(playerBody);
-
-        pitchObj.add(camera);
-        yawObj.add(pitchObj);
-        yawObj.position.y = 1.6;
-        scene.add(yawObj);
-
-        // Lights
-        const amb = new THREE.AmbientLight(0xffffff, 0.7);
-        scene.add(amb);
-        const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-        dir.position.set(50, 100, 50);
-        dir.castShadow = true; // Shadows for depth
-        scene.add(dir);
-
-        buildMap(); // New terrain generation
-
-        renderer = new THREE.WebGLRenderer({ antialias: false });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true; // Enable shadows
-        document.body.appendChild(renderer.domElement);
-
-        document.getElementById('loader').style.display = 'none';
-        document.getElementById('game-ui').style.display = 'block';
-        
-        setupControls();
-        setupNet();
-        animate();
-    }
-
-    // --- 3D TERRAIN GENERATION ---
-    function buildMap() {
-        // Floor with Heightmap logic
-        const size = 400;
-        const segments = 100;
-        const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
-        const positionAttribute = geometry.attributes.position;
-        const vertex = new THREE.Vector3();
-
-        // Add randomness to height
-        for (let i = 0; i < positionAttribute.count; i++) {
-            vertex.fromBufferAttribute(positionAttribute, i);
-            // Simple noise using Math.sin/cos for hills
-            const height = Math.sin(vertex.x * 0.05) * 2 + Math.cos(vertex.y * 0.05) * 2;
-            vertex.z = height; // PlaneGeometry is rotated later, so Z is up initially
-            positionAttribute.setXYZ(i, vertex.x, vertex.y, vertex.z);
-        }
-        
-        geometry.computeVertexNormals();
-
-        const fTex = genTex('#3e6b3e', 'noise'); 
-        fTex.wrapS = THREE.RepeatWrapping; fTex.wrapT = THREE.RepeatWrapping;
-        fTex.repeat.set(50, 50);
-        
-        const material = new THREE.MeshLambertMaterial({ map: fTex });
-        const floor = new THREE.Mesh(geometry, material);
-        floor.rotation.x = -Math.PI / 2;
-        floor.receiveShadow = true;
-        scene.add(floor);
-
-        // Physics for Terrain (Heightfield is hard, we use a simplified approximation or just flat + boxes)
-        // For performance in JS, we will use a flat plane for physics but visual hills.
-        // To walk on hills in CannonJS without heightfield lag:
-        const fBody = new CANNON.Body({mass:0, shape:new CANNON.Plane()});
-        fBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
-        world.addBody(fBody);
-        
-        // Add some "hills" physics manually so you can jump on them
-        for(let i=0; i<30; i++) {
-            const r = 5 + Math.random() * 10;
-            const h = 2 + Math.random() * 4;
-            const x = (Math.random()-0.5)*300;
-            const z = (Math.random()-0.5)*300;
-            
-            // Visual Hill
-            const hillGeo = new THREE.SphereGeometry(r, 16, 8, 0, Math.PI * 2, 0, Math.PI/2);
-            const hillMat = new THREE.MeshLambertMaterial({color:0x3e6b3e});
-            const hillMesh = new THREE.Mesh(hillGeo, hillMat);
-            hillMesh.position.set(x, h/2, z);
-            scene.add(hillMesh);
-
-            // Physics Hill (Cylinder/Cone)
-            const hillBody = new CANNON.Body({mass:0});
-            hillBody.addShape(new CANNON.Cylinder(r, r, h, 8));
-            hillBody.position.set(x, h/2, z);
-            world.addBody(hillBody);
+        function log(msg) {
+            logBox.innerText += "\n> " + msg;
+            logBox.scrollTop = logBox.scrollHeight;
         }
 
-        const wallMat = new THREE.MeshLambertMaterial({map:genTex('#5d4037', 'noise')});
-        const crateMat = new THREE.MeshBasicMaterial({map:genTex('#ffcc00', 'box')});
-        
-        // Buildings
-        for(let i=0; i<50; i++) {
-            const w = 4 + Math.random()*8;
-            const h = 4 + Math.random()*10;
-            const d = 4 + Math.random()*8;
-            const x = (Math.random()-0.5)*300;
-            const z = (Math.random()-0.5)*300;
-            
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), wallMat);
-            mesh.position.set(x, h/2, z);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            scene.add(mesh);
-            
-            const body = new CANNON.Body({mass:0, position:new CANNON.Vec3(x, h/2, z)});
-            body.addShape(new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2)));
-            world.addBody(body);
-
-            if(Math.random() > 0.4) {
-                spawnAmmo(x, h + 0.5, z, crateMat);
-            }
+        // Common Headers (Browser managed headers removed)
+        function getHeaders(isJson = false) {
+            const h = new Headers();
+            h.append('Accept', isJson ? 'application/json' : 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+            h.append('x-client-name', 'platoboost webclient');
+            h.append('x-client-version', '5.3.2');
+            h.append('accept-language', 'en-US,en;q=0.9');
+            if(isJson) h.append('Content-Type', 'application/json');
+            return h;
         }
-        
-        for(let i=0; i<20; i++) {
-             spawnAmmo((Math.random()-0.5)*300, 0.5, (Math.random()-0.5)*300, crateMat);
+
+        // --- STEP 1: Initialization (/a?d=...) ---
+        function step1_Initialize() {
+            log("Running Step 1: Initializing...");
+            
+            const url = 'https://auth.platorelay.com/a?d=7Us7D7i5a9O22oJXNZDdvZj6McbQMUgoPNj9vndasGDRep0srHcBVuxxDnZglFIFRPw4jhoa2hFMNkVqxRyjJSxrowXISCPV6ueCXCSY7wtJxy9WUnjvnAWIB786AQpfqrDaZCItWyh3ZtSjLexzmTXx3z561HkczW2qdvtajhHKoQmQmTLk6wQTc36i6nTww7Fo2ZDIWNhbxHb92M4cB1Ne0TiXzYKy3X9pUMRAC2QZF28f8zeXnR6N7WBqd44m3DcZGt6iDWsXaLRkYU8zOZfhnT4jb2yyIBpdmBJ1eTcXwHhGNygguHnG1iOdnP7VoKODVlbPV2TtxGnOE2Jie2IdKOzYcDcE9HETvfebL5jeBv7pBN9VSKrJst0k0sixibRljGFb1q5ZQIH3l51jOR9zDFluhVaspHroyo8GZ39xevIbRTjHkO8YAvoYR75I0I2c0x15YMCcCpfB1GHq';
+            
+            fetch(url, {
+                method: 'GET',
+                headers: getHeaders(false),
+                credentials: 'include' // IMPORTAMT: Saves cookies
+            })
+            .then(response => {
+                log("Step 1 Response Status: " + response.status);
+                return response.text();
+            })
+            .then(result => {
+                log("Step 1 Success! Cookies should be saved.");
+            })
+            .catch(error => log("Step 1 Error: " + error));
         }
-    }
-    
-    let pickups = [];
-    function spawnAmmo(x, y, z, mat) {
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), mat);
-        mesh.position.set(x, y, z);
-        scene.add(mesh);
-        const body = new CANNON.Body({mass:0, position:new CANNON.Vec3(x, y, z)});
-        body.addShape(new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5)));
-        world.addBody(body);
-        
-        pickups.push({mesh:mesh, body:body, active:true});
-    }
 
-    function setupNet() {
-        setInterval(() => {
-            if(!isDead) {
-                playersRef.child(myId).update({
-                    x: playerBody.position.x,
-                    y: playerBody.position.y,
-                    z: playerBody.position.z,
-                    rot: yawObj.rotation.y,
-                    moving: (move.f||move.b||move.l||move.r)
-                });
-            }
-        }, 100);
+        // --- STEP 2: Validation (PUT /api/session/step) ---
+        function step2_Validate() {
+            log("Running Step 2: Validating...");
 
-        playersRef.on("value", snap => {
-            const d = snap.val() || {};
-            // Cleanup disconnected players
-            for(let id in otherPlayers) if(!d[id]) { 
-                scene.remove(otherPlayers[id].root); 
-                delete otherPlayers[id]; 
-            }
-            
-            // Update Existing
-            for(let id in d) {
-                if(id === myId) continue;
-                if(!otherPlayers[id]) {
-                    const pObj = createPlayerMesh();
-                    scene.add(pObj.mesh);
-                    pObj.mesh.userData = { id: id }; 
-                    shootableMeshes.push(pObj.mesh);
-                    otherPlayers[id] = { root: pObj.mesh, legL: pObj.legL, legR: pObj.legR };
-                }
-                const p = otherPlayers[id];
-                const data = d[id];
-                
-                // Smooth Lerp
-                p.root.position.lerp(new THREE.Vector3(data.x, data.y, data.z), 0.2);
-                p.root.rotation.y = data.rot;
-                
-                if(data.moving) {
-                    const t = Date.now() * 0.01;
-                    p.legL.rotation.x = Math.sin(t) * 0.5;
-                    p.legR.rotation.x = -Math.sin(t) * 0.5;
-                } else {
-                    p.legL.rotation.x = 0;
-                    p.legR.rotation.x = 0;
-                }
-            }
-        });
+            const url = 'https://auth.platorelay.com/api/session/step?ticket=7Us7D7i5a9O22oJXNZDdvZj6McbQMUgoPNj9vndasGDRep0srHcBVuxxDnZglFIFRPw4jhoa2hFMNkVqxRyjJSxrowXISCPV6ueCXCSY7wtJxy9WUnjvnAWIB786AQpfqrDaZCItWyh3ZtSjLexzmTXx3z561HkczW2qdvtajhHKoQmQmTLk6wQTc36i6nTww7Fo2ZDIWNhbxHb92M4cB1Ne0TiXzYKy3X9pUMRAC2QZF28f8zeXnR6N7WBqd44m3DcZGt6iDWsXaLRkYU8zOZfhnT4jb2yyIBpdmBJ1eTcXwHhGNygguHnG1iOdnP7VoKODVlbPV2TtxGnOE2Jie2IdKOzYcDcE9HETvfebL5jeBv7pBN9VSKrJst0k0sixibRljGFb1q5ZQIH3l51jOR9zDFluhVaspHroyo8GZ39xevIbRTjHkO8YAvoYR75I0I2c0x15YMCcCpfB1GHq&service=2';
 
-        // Damage Listener (Getting Shot)
-        playersRef.child(myId).child("hits").on("child_added", (snap) => {
-            if(isGodMode || isDead) return;
-            const dmg = snap.val();
-            hp -= dmg;
-            document.getElementById('hp-val').innerText = hp;
-            snap.ref.remove();
-            
-            // RED FLASH EFFECT
-            const overlay = document.getElementById('damage-overlay');
-            overlay.style.opacity = 0.5;
-            setTimeout(() => overlay.style.opacity = 0, 300);
-            
-            // Screen Shake
-            pitchObj.rotation.x += 0.1; 
-            setTimeout(() => pitchObj.rotation.x -= 0.1, 100);
-
-            if(hp <= 0) die();
-        });
-
-        chatRef.limitToLast(10).on("child_added", s => {
-            const v = s.val();
-            if(v.time < joinTime) return; 
-            if(!isChatOpen) createToast(`${v.id.substr(0,4)}: ${v.msg}`);
-            const d = document.createElement('div');
-            d.innerHTML = `<b style="color:${v.id===myId?'lime':'orange'}">${v.id.substr(0,4)}:</b> ${v.msg}`;
-            document.getElementById('chat-msgs').append(d);
-            document.getElementById('chat-msgs').scrollTop = 9999;
-        });
-        
-        document.getElementById('chat-send').onclick = () => {
-            const t = document.getElementById('chat-input').value;
-            if(t) { chatRef.push({id:myId, msg:t, time:Date.now()}); document.getElementById('chat-input').value=''; }
-        }
-    }
-
-    function fireBullet() {
-        const now = Date.now();
-        if(now - lastShot < 150) return;
-        lastShot = now;
-
-        if(ammo > 0) {
-            playPew();
-            if(!isGodMode) { ammo--; document.getElementById('ammo-val').innerText = ammo; }
-            
-            pitchObj.rotation.x += 0.02; // Recoil
-
-            const ray = new THREE.Raycaster();
-            ray.setFromCamera(new THREE.Vector2(0,0), camera);
-            
-            let targets = [];
-            Object.values(otherPlayers).forEach(p => targets.push(p.root));
-            
-            const intersects = ray.intersectObjects(targets, true);
-            
-            if(intersects.length > 0) {
-                let hitObj = intersects[0].object;
-                while(hitObj.parent && !hitObj.userData.id) hitObj = hitObj.parent;
-                
-                if(hitObj.userData.id) {
-                    // SEND HIT
-                    playersRef.child(hitObj.userData.id).child("hits").push(15);
-                    
-                    // SPAWN BLOOD PARTICLES
-                    spawnParticles(intersects[0].point, 0xff0000, 5);
-                }
-            }
-        }
-    }
-
-    function die() {
-        isDead = true;
-        document.getElementById('game-ui').style.display = 'none';
-        document.getElementById('death-screen').style.display = 'flex';
-        playersRef.child(myId).remove();
-    }
-
-    window.respawn = function() {
-        isDead = false;
-        hp = 100; ammo = 30;
-        document.getElementById('hp-val').innerText = hp;
-        document.getElementById('ammo-val').innerText = ammo;
-        playerBody.position.set((Math.random()-0.5)*200, 20, (Math.random()-0.5)*200);
-        playerBody.velocity.set(0,0,0);
-        document.getElementById('death-screen').style.display = 'none';
-        document.getElementById('game-ui').style.display = 'block';
-    }
-
-    function setupControls() { 
-        const joy = document.getElementById('joystick-zone');
-        const knob = document.getElementById('stick-knob');
-        
-        joy.addEventListener('touchstart', e => {
-            e.preventDefault(); const t = e.changedTouches[0];
-            touchData.moveId = t.identifier; touchData.startX = t.clientX; touchData.startY = t.clientY;
-        }, {passive:false});
-
-        joy.addEventListener('touchmove', e => {
-            e.preventDefault();
-            for(let i=0; i<e.changedTouches.length; i++) {
-                if(e.changedTouches[i].identifier === touchData.moveId) {
-                    const t = e.changedTouches[i];
-                    let dx = t.clientX - touchData.startX, dy = t.clientY - touchData.startY;
-                    const d = Math.sqrt(dx*dx+dy*dy);
-                    if(d>40) { dx=(dx/d)*40; dy=(dy/d)*40; }
-                    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-                    move.f = dy<-10; move.b = dy>10; move.l = dx<-10; move.r = dx>10;
-                }
-            }
-        }, {passive:false});
-
-        joy.addEventListener('touchend', e => {
-            for(let i=0; i<e.changedTouches.length; i++) {
-                if(e.changedTouches[i].identifier === touchData.moveId) {
-                    touchData.moveId = null; move={f:0,b:0,l:0,r:0};
-                    knob.style.transform = `translate(-50%, -50%)`;
-                }
-            }
-        });
-
-        document.addEventListener('touchstart', e => {
-            for(let i=0; i<e.changedTouches.length; i++) {
-                const t = e.changedTouches[i];
-                if(t.clientX > window.innerWidth/2 && !t.target.classList.contains('action-btn')) {
-                    touchData.lookId = t.identifier; touchData.lookX = t.clientX; touchData.lookY = t.clientY;
-                }
-            }
-        }, {passive:false});
-
-        document.addEventListener('touchmove', e => {
-            e.preventDefault();
-            for(let i=0; i<e.changedTouches.length; i++) {
-                if(e.changedTouches[i].identifier === touchData.lookId) {
-                    const t = e.changedTouches[i];
-                    yawObj.rotation.y -= (t.clientX - touchData.lookX)*0.005;
-                    pitchObj.rotation.x -= (t.clientY - touchData.lookY)*0.005;
-                    pitchObj.rotation.x = Math.max(-1.5, Math.min(1.5, pitchObj.rotation.x));
-                    touchData.lookX = t.clientX; touchData.lookY = t.clientY;
-                }
-            }
-        }, {passive:false});
-
-        document.getElementById('btn-jump').addEventListener('touchstart', e=>{ 
-            e.preventDefault(); 
-            if(playerBody.velocity.y < 0.1) // Simple ground check
-                playerBody.velocity.y = isGodMode? 15 : 10; 
-        });
-        document.getElementById('btn-fire').addEventListener('touchstart', e=>{ e.preventDefault(); fireBullet(); });
-        document.getElementById('btn-scope').addEventListener('touchstart', e=>{ e.preventDefault(); isScoped=!isScoped; camera.fov=isScoped?30:75; camera.updateProjectionMatrix(); });
-    }
-
-    function animate() {
-        requestAnimationFrame(animate);
-        const dt = 1/60;
-        
-        if(!isDead) {
-            if(isGodMode) {
-                playerBody.velocity.set(0,0,0);
-                const speed = 40; // FASTER GOD MODE
-                const dir = new THREE.Vector3();
-                if(move.f) dir.z = -1; if(move.b) dir.z = 1;
-                if(move.l) dir.x = -1; if(move.r) dir.x = 1;
-                dir.applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
-                playerBody.position.add(dir.multiplyScalar(speed * dt));
-            } else {
-                world.step(dt);
-                
-                // MOVEMENT FIX
-                const speed = 15; // Increased Base Speed
-                const dir = new THREE.Vector3();
-                if(move.f) dir.z = -1; if(move.b) dir.z = 1;
-                if(move.l) dir.x = -1; if(move.r) dir.x = 1;
-                
-                // Apply rotation only
-                dir.applyEuler(new THREE.Euler(0, yawObj.rotation.y, 0));
-                
-                // Force velocity directly for consistent speed
-                playerBody.velocity.x = dir.x * speed;
-                playerBody.velocity.z = dir.z * speed;
-            }
-
-            yawObj.position.copy(playerBody.position);
-            yawObj.position.y += isGodMode ? 0 : 0.6;
-            
-            // Particles Update
-            for(let i=particles.length-1; i>=0; i--) {
-                const p = particles[i];
-                p.life -= 0.05;
-                p.mesh.position.add(p.vel);
-                p.mesh.rotation.x += 0.1;
-                p.mesh.scale.setScalar(p.life);
-                if(p.life <= 0) {
-                    scene.remove(p.mesh);
-                    particles.splice(i, 1);
-                }
-            }
-            
-            pickups.forEach(p => {
-                if(p.active && playerBody.position.distanceTo(p.mesh.position) < 2) {
-                    p.active = false; scene.remove(p.mesh); world.removeBody(p.body);
-                    ammo = MAX_AMMO; document.getElementById('ammo-val').innerText = ammo;
-                }
+            // Data from your logs
+            const data = JSON.stringify({
+                "captcha": null,
+                "meta": "49080eaf479094074f9aef00135c724d774d00f2aeb7dd05bf6e1507bf2c8777d5bd4f2e817e324382ef71c9063d68d9dcaad9f48c98179b6db8553aa273be201b5cd2cd6e3a11ccf6b46a1de57ef91f3472c46c427351e78c56ba5b2ce9eb0b7319e91f5e3c8a8d189106337564468e2d7989dd250f6f738f536e4a72c1f6aa70a90a96da5d095601017e8bc7e97b1501d6b47fdbec739462bf938dc1443af6597570a677d9430d8aeadc353cbf526d61ea1433dc75aa683e8d99121e54320774e24c89952bea664ff9352e7d96fe6bd89f95b534d424ea5edea614145b2779844d16329d9143103a6044b3f1da49c2eee1f980449cfa20058685f821f55a98fc1007dac7f03aa3a4424550b25e8ed45c7431c13e217c067a4e8c12906f3fdc426cfb68f049568caa290a6b893a83cb2b51491b7aa7b48119cbc2d09caed2c1c918facca14346601039dabbae1c68313893e759467b6b7199bd83f61f5f491bafd56f79a940d47d04e1ce50c45c7ec0e91f3b341304fe0925204619c4b77504d03c6fa37412b74ce654ec417b2cfe6185ce97cfe6bb086ef2d4315af09acab36337e5ac61fc450942b057bf7244be2647701540c0b9019d33e3e556978e0c648f54100462a545418ff18d4b8c814527bf482f586f79fe2ca447aa4d18fd9c32b9bcdbda710609b3576e4b4076713972cfcdc25d186b57240ec61f6e8841a5a6bd7da343959631cd8010bdcac1ec6a8a48a2cb3a8b8f2e6f97c0f32a60e30cf219b40d807afb10e01fa3ef5ea44d61c774ef4d98f9de1a159794dcc1d191e975bdb54ceab325622ea147191d1a5209899862bee649f190bae8d9b979751c060143880d2dda779801cdba5c6e82d56b44dbf6074e03c333ad4a6c1584f3ace235de2adc3be1a7d2422987b22641e879aa29722ce77e45831038f5074646b63ca8e211",
+                "stream": "183cf7f7c7e4985a48c81cd5b05a3fb72cea4cdf730a6075097dbce210bac5c328e8ccb80c15e57d40c371e6167f6ac3fb38efd4ad37734c6260f34f26b7703011",
+                "resolved": true
             });
+
+            fetch(url, {
+                method: 'PUT',
+                headers: getHeaders(true),
+                body: data,
+                credentials: 'include' // IMPORTANT: Sends cookies created in Step 1
+            })
+            .then(response => response.text())
+            .then(result => {
+                log("Step 2 Result: " + result);
+            })
+            .catch(error => log("Step 2 Error: " + error));
         }
-        renderer.render(scene, camera);
-    }
 
-    window.toggleAdmin = function() {
-        if(isGodMode) {
-            isGodMode = false;
-            document.getElementById('admin-btn').innerText = "GET ADMIN";
-            document.getElementById('admin-btn').classList.remove('active');
-            document.getElementById('hp-val').innerText = hp;
-            document.getElementById('hp-val').style.color = "#ff3333";
-            ammo = Math.min(ammo, MAX_AMMO); 
-            document.getElementById('ammo-val').innerText = ammo;
-        } else document.getElementById('admin-modal').style.display = 'flex';
-    }
-    window.closeModal = function() { document.getElementById('admin-modal').style.display = 'none'; }
-    window.verifyAdmin = function() {
-        if(document.getElementById('admin-code').value === "7434") {
-            isGodMode = true; closeModal();
-            document.getElementById('admin-btn').innerText = "LEAVE ADMIN";
-            document.getElementById('admin-btn').classList.add('active');
-            document.getElementById('hp-val').innerText = "GOD";
-            document.getElementById('hp-val').style.color = "#00ff00";
-            document.getElementById('ammo-val').innerText = "∞";
-            ammo = 9999;
-        } else alert("ACCESS DENIED");
-    }
+        // --- STEP 3: Check Status ---
+        function step3_CheckStatus() {
+            log("Running Step 3: Checking Status...");
 
-    window.toggleChatUi = function() {
-        const w = document.getElementById('chat-wrap');
-        isChatOpen = !isChatOpen;
-        w.style.display = isChatOpen ? 'flex' : 'none';
-    }
-    
-    function createToast(msg) {
-        const t = document.createElement('div'); t.className = 'toast-msg'; t.innerText = msg;
-        document.getElementById('chat-toasts').appendChild(t);
-        setTimeout(()=>t.remove(), 4000);
-    }
+            const url = 'https://auth.platorelay.com/api/session/status?ticket=7Us7D7i5a9O22oJXNZDdvZj6McbQMUgoPNj9vndasGDRep0srHcBVuxxDnZglFIFRPw4jhoa2hFMNkVqxRyjJSxrowXISCPV6ueCXCSY7wtJxy9WUnjvnAWIB786AQpfqrDaZCItWyh3ZtSjLexzmTXx3z561HkczW2qdvtajhHKoQmQmTLk6wQTc36i6nTww7Fo2ZDIWNhbxHb92M4cB1Ne0TiXzYKy3X9pUMRAC2QZF28f8zeXnR6N7WBqd44m3DcZGt6iDWsXaLRkYU8zOZfhnT4jb2yyIBpdmBJ1eTcXwHhGNygguHnG1iOdnP7VoKODVlbPV2TtxGnOE2Jie2IdKOzYcDcE9HETvfebL5jeBv7pBN9VSKrJst0k0sixibRljGFb1q5ZQIH3l51jOR9zDFluhVaspHroyo8GZ39xevIbRTjHkO8YAvoYR75I0I2c0x15YMCcCpfB1GHq';
 
-    window.onload = init;
-    window.onresize = () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
-</script>
+            fetch(url, {
+                method: 'GET',
+                headers: getHeaders(false),
+                credentials: 'include' // IMPORTANT: Sends valid session cookies
+            })
+            .then(response => response.text())
+            .then(result => {
+                log("Step 3 FINAL RESULT:\n" + result);
+            })
+            .catch(error => log("Step 3 Error: " + error));
+        }
+    </script>
+
 </body>
 </html>
+
