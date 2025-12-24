@@ -3,178 +3,298 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plato Session Manager</title>
+    <title>Delta Executor Key Generator</title>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        /* --- GAMING THEME CSS --- */
+        :root {
+            --primary: #ff3333; /* Delta Red */
+            --bg: #0a0a0a;
+            --card-bg: #141414;
+            --text: #ffffff;
+            --border: #333;
+        }
+
         body {
-            background-color: #0d1117;
-            color: #c9d1d9;
-            font-family: monospace;
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px;
+            justify-content: center;
+            min-height: 100vh;
+            background-image: radial-gradient(circle at 50% 50%, #1a0505 0%, #000 100%);
         }
+
         .container {
             width: 100%;
-            max-width: 600px;
-            background: #161b22;
-            padding: 20px;
-            border-radius: 10px;
-            border: 1px solid #30363d;
+            max-width: 550px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 0 20px rgba(255, 51, 51, 0.1);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
         }
-        h2 { text-align: center; color: #58a6ff; }
-        
-        .step {
-            margin-bottom: 20px;
-            padding: 15px;
-            border: 1px solid #30363d;
+
+        /* Top Red Line */
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--primary);
+            box-shadow: 0 0 10px var(--primary);
+        }
+
+        h1 {
+            margin-top: 10px;
+            font-size: 24px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-shadow: 0 0 10px rgba(255, 51, 51, 0.5);
+        }
+
+        .subtitle {
+            color: #888;
+            font-size: 14px;
+            margin-bottom: 25px;
+        }
+
+        /* Steps Section */
+        .steps {
+            background: #0f0f0f;
             border-radius: 8px;
-            background: #21262d;
+            padding: 15px;
+            text-align: left;
+            margin-bottom: 20px;
+            border: 1px solid #222;
         }
-        .step h3 { margin-top: 0; font-size: 16px; color: #79c0ff; }
-        
+        .step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #ccc;
+        }
+        .step i {
+            color: var(--primary);
+            width: 25px;
+            text-align: center;
+            margin-right: 10px;
+        }
+
+        /* Input Box */
+        .input-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        input {
+            width: 100%;
+            padding: 15px;
+            padding-left: 45px; /* Space for icon */
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: white;
+            font-family: monospace;
+            font-size: 14px;
+            transition: all 0.3s;
+            box-sizing: border-box;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 15px rgba(255, 51, 51, 0.2);
+        }
+        .input-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+        }
+
+        /* Button */
         button {
             width: 100%;
-            padding: 12px;
-            background-color: #238636;
+            padding: 16px;
+            background: linear-gradient(90deg, #cc0000, #ff3333);
             color: white;
             border: none;
-            border-radius: 6px;
-            font-size: 14px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 800;
+            text-transform: uppercase;
             cursor: pointer;
-            margin-top: 10px;
-            font-weight: bold;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 5px 15px rgba(255, 0, 0, 0.2);
         }
-        button:hover { background-color: #2ea043; }
-        
-        #console-log {
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 0, 0, 0.4);
+        }
+        button:active {
+            transform: translateY(1px);
+        }
+        button:disabled {
+            background: #333;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* Result Box */
+        #result-box {
+            display: none;
+            margin-top: 25px;
             background: #000;
-            color: #0f0;
-            padding: 15px;
-            margin-top: 20px;
-            border-radius: 5px;
-            min-height: 150px;
-            white-space: pre-wrap;
-            font-size: 12px;
             border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: left;
+        }
+        #result-text {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            color: #00ff00;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .status-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: block;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+
+        /* Ad Placeholder */
+        .ad-space {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px dashed #444;
+            color: #444;
+            font-size: 12px;
+            border-radius: 8px;
         }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h2>Plato Auto-Cookie Sequence</h2>
-        
-        <!-- STEP 1: INITIALIZE -->
-        <div class="step">
-            <h3>Step 1: Initialize Session (Cookie Maker)</h3>
-            <p style="font-size: 12px; color: #8b949e;">Ye request '/a?d=...' url ko hit karegi taaki browser cookies save kar le.</p>
-            <button onclick="step1_Initialize()">1. Run Initialization</button>
+        <h1>Delta Executor <span style="color:var(--primary)">Key</span></h1>
+        <p class="subtitle">Get Your Free Key Instantly</p>
+
+        <!-- Instructions -->
+        <div class="steps">
+            <div class="step"><i class="fas fa-mobile-alt"></i> 1. Open Delta App & Click "Get Key"</div>
+            <div class="step"><i class="fas fa-copy"></i> 2. Copy the link (auth.platorelay...)</div>
+            <div class="step"><i class="fas fa-paste"></i> 3. Paste the link below & Click Generate</div>
         </div>
 
-        <!-- STEP 2: VALIDATE -->
-        <div class="step">
-            <h3>Step 2: Validate Session (PUT Data)</h3>
-            <p style="font-size: 12px; color: #8b949e;">Ye wo 'Step' API hai jo JSON data bhej kar session confirm karti hai.</p>
-            <button onclick="step2_Validate()">2. Send Validation Data</button>
+        <!-- Input -->
+        <div class="input-group">
+            <i class="fas fa-link input-icon"></i>
+            <input type="text" id="userLink" placeholder="Paste your Link Here...">
         </div>
 
-        <!-- STEP 3: STATUS -->
-        <div class="step">
-            <h3>Step 3: Check Status</h3>
-            <p style="font-size: 12px; color: #8b949e;">Finally, ye check karega ke session active hai ya nahi.</p>
-            <button onclick="step3_CheckStatus()">3. Get Status</button>
+        <!-- Button -->
+        <button id="genBtn" onclick="generateKey()">
+            <i class="fas fa-key"></i> Generate Key
+        </button>
+
+        <!-- Result -->
+        <div id="result-box">
+            <span class="status-header" id="statusHeader">STATUS LOG:</span>
+            <div id="result-text"></div>
         </div>
 
-        <div id="console-log">Logs will appear here...</div>
+        <!-- Adsterra Space -->
+        <div class="ad-space">
+            [Adsterra Banner Ad Here]
+        </div>
     </div>
 
     <script>
-        const logBox = document.getElementById('console-log');
-        
-        function log(msg) {
-            logBox.innerText += "\n> " + msg;
-            logBox.scrollTop = logBox.scrollHeight;
-        }
+        async function generateKey() {
+            const link = document.getElementById('userLink').value.trim();
+            const btn = document.getElementById('genBtn');
+            const resultBox = document.getElementById('result-box');
+            const resultText = document.getElementById('result-text');
+            const statusHeader = document.getElementById('statusHeader');
 
-        // Common Headers (Browser managed headers removed)
-        function getHeaders(isJson = false) {
-            const h = new Headers();
-            h.append('Accept', isJson ? 'application/json' : 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
-            h.append('x-client-name', 'platoboost webclient');
-            h.append('x-client-version', '5.3.2');
-            h.append('accept-language', 'en-US,en;q=0.9');
-            if(isJson) h.append('Content-Type', 'application/json');
-            return h;
-        }
+            // 1. Basic Validation
+            if (!link) {
+                alert("Please paste the link first!");
+                return;
+            }
+            if (!link.includes("platorelay")) {
+                alert("Invalid Link! Please copy the correct link from Delta Executor.");
+                return;
+            }
 
-        // --- STEP 1: Initialization (/a?d=...) ---
-        function step1_Initialize() {
-            log("Running Step 1: Initializing...");
-            
-            const url = 'https://auth.platorelay.com/a?d=7Us7D7i5a9O22oJXNZDdvZj6McbQMUgoPNj9vndasGDRep0srHcBVuxxDnZglFIFRPw4jhoa2hFMNkVqxRyjJSxrowXISCPV6ueCXCSY7wtJxy9WUnjvnAWIB786AQpfqrDaZCItWyh3ZtSjLexzmTXx3z561HkczW2qdvtajhHKoQmQmTLk6wQTc36i6nTww7Fo2ZDIWNhbxHb92M4cB1Ne0TiXzYKy3X9pUMRAC2QZF28f8zeXnR6N7WBqd44m3DcZGt6iDWsXaLRkYU8zOZfhnT4jb2yyIBpdmBJ1eTcXwHhGNygguHnG1iOdnP7VoKODVlbPV2TtxGnOE2Jie2IdKOzYcDcE9HETvfebL5jeBv7pBN9VSKrJst0k0sixibRljGFb1q5ZQIH3l51jOR9zDFluhVaspHroyo8GZ39xevIbRTjHkO8YAvoYR75I0I2c0x15YMCcCpfB1GHq';
-            
-            fetch(url, {
-                method: 'GET',
-                headers: getHeaders(false),
-                credentials: 'include' // IMPORTAMT: Saves cookies
-            })
-            .then(response => {
-                log("Step 1 Response Status: " + response.status);
-                return response.text();
-            })
-            .then(result => {
-                log("Step 1 Success! Cookies should be saved.");
-            })
-            .catch(error => log("Step 1 Error: " + error));
-        }
+            // 2. UI Loading State
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            btn.disabled = true;
+            resultBox.style.display = "block";
+            statusHeader.innerText = "CONNECTING TO SERVER...";
+            statusHeader.style.color = "yellow";
+            resultText.innerText = "Verifying session details...";
+            resultText.style.color = "#ccc";
 
-        // --- STEP 2: Validation (PUT /api/session/step) ---
-        function step2_Validate() {
-            log("Running Step 2: Validating...");
+            try {
+                // 3. Backend Call (Apna PythonAnywhere URL)
+                const response = await fetch('https://shehzadplayz74.pythonanywhere.com/api/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: link })
+                });
 
-            const url = 'https://auth.platorelay.com/api/session/step?ticket=7Us7D7i5a9O22oJXNZDdvZj6McbQMUgoPNj9vndasGDRep0srHcBVuxxDnZglFIFRPw4jhoa2hFMNkVqxRyjJSxrowXISCPV6ueCXCSY7wtJxy9WUnjvnAWIB786AQpfqrDaZCItWyh3ZtSjLexzmTXx3z561HkczW2qdvtajhHKoQmQmTLk6wQTc36i6nTww7Fo2ZDIWNhbxHb92M4cB1Ne0TiXzYKy3X9pUMRAC2QZF28f8zeXnR6N7WBqd44m3DcZGt6iDWsXaLRkYU8zOZfhnT4jb2yyIBpdmBJ1eTcXwHhGNygguHnG1iOdnP7VoKODVlbPV2TtxGnOE2Jie2IdKOzYcDcE9HETvfebL5jeBv7pBN9VSKrJst0k0sixibRljGFb1q5ZQIH3l51jOR9zDFluhVaspHroyo8GZ39xevIbRTjHkO8YAvoYR75I0I2c0x15YMCcCpfB1GHq&service=2';
+                const data = await response.json();
 
-            // Data from your logs
-            const data = JSON.stringify({
-                "captcha": null,
-                "meta": "49080eaf479094074f9aef00135c724d774d00f2aeb7dd05bf6e1507bf2c8777d5bd4f2e817e324382ef71c9063d68d9dcaad9f48c98179b6db8553aa273be201b5cd2cd6e3a11ccf6b46a1de57ef91f3472c46c427351e78c56ba5b2ce9eb0b7319e91f5e3c8a8d189106337564468e2d7989dd250f6f738f536e4a72c1f6aa70a90a96da5d095601017e8bc7e97b1501d6b47fdbec739462bf938dc1443af6597570a677d9430d8aeadc353cbf526d61ea1433dc75aa683e8d99121e54320774e24c89952bea664ff9352e7d96fe6bd89f95b534d424ea5edea614145b2779844d16329d9143103a6044b3f1da49c2eee1f980449cfa20058685f821f55a98fc1007dac7f03aa3a4424550b25e8ed45c7431c13e217c067a4e8c12906f3fdc426cfb68f049568caa290a6b893a83cb2b51491b7aa7b48119cbc2d09caed2c1c918facca14346601039dabbae1c68313893e759467b6b7199bd83f61f5f491bafd56f79a940d47d04e1ce50c45c7ec0e91f3b341304fe0925204619c4b77504d03c6fa37412b74ce654ec417b2cfe6185ce97cfe6bb086ef2d4315af09acab36337e5ac61fc450942b057bf7244be2647701540c0b9019d33e3e556978e0c648f54100462a545418ff18d4b8c814527bf482f586f79fe2ca447aa4d18fd9c32b9bcdbda710609b3576e4b4076713972cfcdc25d186b57240ec61f6e8841a5a6bd7da343959631cd8010bdcac1ec6a8a48a2cb3a8b8f2e6f97c0f32a60e30cf219b40d807afb10e01fa3ef5ea44d61c774ef4d98f9de1a159794dcc1d191e975bdb54ceab325622ea147191d1a5209899862bee649f190bae8d9b979751c060143880d2dda779801cdba5c6e82d56b44dbf6074e03c333ad4a6c1584f3ace235de2adc3be1a7d2422987b22641e879aa29722ce77e45831038f5074646b63ca8e211",
-                "stream": "183cf7f7c7e4985a48c81cd5b05a3fb72cea4cdf730a6075097dbce210bac5c328e8ccb80c15e57d40c371e6167f6ac3fb38efd4ad37734c6260f34f26b7703011",
-                "resolved": true
-            });
+                if (data.success) {
+                    // Success
+                    statusHeader.innerText = "✅ SUCCESS - KEY GENERATED";
+                    statusHeader.style.color = "#00ff00";
+                    resultText.style.color = "#00ff00";
+                    
+                    // JSON ko sundar dikhane ke liye
+                    resultText.innerText = JSON.stringify(data.plato_response, null, 2);
 
-            fetch(url, {
-                method: 'PUT',
-                headers: getHeaders(true),
-                body: data,
-                credentials: 'include' // IMPORTANT: Sends cookies created in Step 1
-            })
-            .then(response => response.text())
-            .then(result => {
-                log("Step 2 Result: " + result);
-            })
-            .catch(error => log("Step 2 Error: " + error));
-        }
+                    btn.innerHTML = '<i class="fas fa-check"></i> Done';
+                    
+                    // Yahan tu redirect logic laga sakta hai agar chahiye
+                    // window.location.href = "YOUR_LINK";
+                    
+                } else {
+                    // Backend Error
+                    statusHeader.innerText = "❌ FAILED";
+                    statusHeader.style.color = "#ff3333";
+                    resultText.style.color = "#ff3333";
+                    resultText.innerText = data.message;
+                    btn.innerHTML = '<i class="fas fa-redo"></i> Try Again';
+                    btn.disabled = false;
+                }
 
-        // --- STEP 3: Check Status ---
-        function step3_CheckStatus() {
-            log("Running Step 3: Checking Status...");
-
-            const url = 'https://auth.platorelay.com/api/session/status?ticket=7Us7D7i5a9O22oJXNZDdvZj6McbQMUgoPNj9vndasGDRep0srHcBVuxxDnZglFIFRPw4jhoa2hFMNkVqxRyjJSxrowXISCPV6ueCXCSY7wtJxy9WUnjvnAWIB786AQpfqrDaZCItWyh3ZtSjLexzmTXx3z561HkczW2qdvtajhHKoQmQmTLk6wQTc36i6nTww7Fo2ZDIWNhbxHb92M4cB1Ne0TiXzYKy3X9pUMRAC2QZF28f8zeXnR6N7WBqd44m3DcZGt6iDWsXaLRkYU8zOZfhnT4jb2yyIBpdmBJ1eTcXwHhGNygguHnG1iOdnP7VoKODVlbPV2TtxGnOE2Jie2IdKOzYcDcE9HETvfebL5jeBv7pBN9VSKrJst0k0sixibRljGFb1q5ZQIH3l51jOR9zDFluhVaspHroyo8GZ39xevIbRTjHkO8YAvoYR75I0I2c0x15YMCcCpfB1GHq';
-
-            fetch(url, {
-                method: 'GET',
-                headers: getHeaders(false),
-                credentials: 'include' // IMPORTANT: Sends valid session cookies
-            })
-            .then(response => response.text())
-            .then(result => {
-                log("Step 3 FINAL RESULT:\n" + result);
-            })
-            .catch(error => log("Step 3 Error: " + error));
+            } catch (error) {
+                // Network Error
+                statusHeader.innerText = "❌ SERVER ERROR";
+                statusHeader.style.color = "#ff3333";
+                resultText.style.color = "#ff3333";
+                resultText.innerText = "Could not connect to server. Check your internet connection.";
+                btn.innerHTML = '<i class="fas fa-redo"></i> Try Again';
+                btn.disabled = false;
+            }
         }
     </script>
-
 </body>
 </html>
-
